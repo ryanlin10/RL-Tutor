@@ -1,0 +1,5 @@
+# Force Railway to use Dockerfile
+# Files that might trigger Nixpacks detection
+frontend/
+backend/nixpacks.toml
+frontend/nixpacks.toml
