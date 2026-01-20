@@ -42,13 +42,13 @@ function ChatPanel({ messages, onSendMessage, onGenerateQuiz, isLoading, isExpan
     
     switch (action) {
       case 'quiz-linear-algebra':
-        onGenerateQuiz('Linear Algebra', 'medium', 5)
+        onGenerateQuiz('Linear Algebra Basics', 'easy', 2)
         break
       case 'quiz-calculus':
-        onGenerateQuiz('Calculus', 'medium', 5)
+        onGenerateQuiz('Derivatives', 'easy', 2)
         break
       case 'quiz-analysis':
-        onGenerateQuiz('Real Analysis', 'medium', 5)
+        onGenerateQuiz('Algebra', 'easy', 2)
         break
       case 'explain':
         setInput('Can you explain ')
@@ -127,21 +127,21 @@ function ChatPanel({ messages, onSendMessage, onGenerateQuiz, isLoading, isExpan
                 <path d="M9 11l3 3L22 4"/>
                 <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
-              Quiz: Linear Algebra
+              Quick Quiz
             </button>
             <button onClick={() => handleQuickAction('quiz-calculus')}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M9 11l3 3L22 4"/>
                 <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
-              Quiz: Calculus
+              Derivatives
             </button>
             <button onClick={() => handleQuickAction('quiz-analysis')}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M9 11l3 3L22 4"/>
                 <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
-              Quiz: Analysis
+              Algebra
             </button>
             <button onClick={() => handleQuickAction('explain')}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

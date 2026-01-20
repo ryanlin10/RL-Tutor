@@ -33,7 +33,7 @@ class GroqService:
    - Adapt your explanation depth to the student's demonstrated level
 
 3. QUIZ GENERATION:
-   When asked to generate a quiz, respond with a JSON object in this exact format:
+   When asked to generate a quiz, you MUST respond with ONLY a JSON object (no other text) in this exact format:
    ```json
    {
      "type": "quiz",
@@ -47,11 +47,12 @@ class GroqService:
          "options": ["A. Option 1", "B. Option 2", "C. Option 3", "D. Option 4"],
          "correct_answer": "B",
          "explanation": "Why this is correct",
-         "difficulty": "medium"
+         "difficulty": "easy"
        }
      ]
    }
    ```
+   IMPORTANT: Every question MUST have exactly 4 options (A, B, C, D). Each option MUST start with the letter followed by a period and space (e.g., "A. Answer text").
 
 4. MATHEMATICAL NOTATION:
    - Use LaTeX notation for all mathematical expressions
@@ -145,17 +146,25 @@ You have access to Oxford Mathematics lecture notes for accurate content."""
         Returns:
             Quiz data dict or error
         """
-        prompt = f"""Generate a quiz with the following specifications:
-- Topic: {topic}
-- Difficulty: {difficulty}
-- Number of questions: {num_questions}
+        prompt = f"""Generate a {num_questions}-question multiple choice quiz on {topic} ({difficulty} difficulty).
 
-Include a mix of:
-- Conceptual understanding questions
-- Computation questions
-- Application/problem-solving questions
+Format: JSON only, no other text.
+{{
+  "type": "quiz",
+  "title": "Title",
+  "topic": "{topic}",
+  "questions": [
+    {{
+      "id": 1,
+      "question": "Question text with $LaTeX$ if needed",
+      "type": "multiple_choice",
+      "options": ["A. opt1", "B. opt2", "C. opt3", "D. opt4"],
+      "correct_answer": "A"
+    }}
+  ]
+}}
 
-Respond ONLY with the JSON quiz object, no other text."""
+Rules: 4 options per question (A/B/C/D), use $...$ for math. Keep explanations short or omit."""
 
         messages = [{"role": "user", "content": prompt}]
         

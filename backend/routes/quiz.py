@@ -129,23 +129,67 @@ def generate_quiz():
 
 def parse_quiz_response(content: str) -> dict | None:
     """Parse quiz JSON from model response."""
+    # Clean content
+    content = content.strip()
+    
+    # Try to find JSON in code block first
+    json_match = re.search(r"```(?:json)?\s*(.*?)\s*```", content, re.DOTALL)
+    if json_match:
+        content = json_match.group(1).strip()
+    
+    # Try parsing as-is first
     try:
-        # Try to find JSON in code block
-        json_match = re.search(r"```(?:json)?\s*(.*?)\s*```", content, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group(1))
-        
-        # Try to parse entire content as JSON
-        return json.loads(content)
+        data = json.loads(content)
+        if isinstance(data, dict) and "questions" in data:
+            return data
     except json.JSONDecodeError:
-        # Try to find JSON object directly
-        try:
-            start = content.find("{")
-            end = content.rfind("}") + 1
-            if start >= 0 and end > start:
-                return json.loads(content[start:end])
-        except json.JSONDecodeError:
-            pass
+        pass
+    
+    # Try to extract JSON object
+    try:
+        start = content.find("{")
+        if start >= 0:
+            # Find matching closing brace
+            depth = 0
+            end = -1
+            for i, char in enumerate(content[start:], start):
+                if char == "{":
+                    depth += 1
+                elif char == "}":
+                    depth -= 1
+                    if depth == 0:
+                        end = i + 1
+                        break
+            
+            if end > start:
+                json_str = content[start:end]
+                data = json.loads(json_str)
+                if isinstance(data, dict) and "questions" in data:
+                    return data
+    except json.JSONDecodeError:
+        pass
+    
+    # Try to fix incomplete JSON by adding missing closing brackets
+    try:
+        start = content.find("{")
+        if start >= 0:
+            json_str = content[start:]
+            # Count brackets
+            open_braces = json_str.count("{")
+            close_braces = json_str.count("}")
+            open_brackets = json_str.count("[")
+            close_brackets = json_str.count("]")
+            
+            # Add missing brackets
+            json_str += "]" * (open_brackets - close_brackets)
+            json_str += "}" * (open_braces - close_braces)
+            
+            data = json.loads(json_str)
+            if isinstance(data, dict) and "questions" in data:
+                return data
+    except json.JSONDecodeError:
+        pass
+    
     return None
 
 

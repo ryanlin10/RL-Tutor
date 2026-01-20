@@ -146,44 +146,67 @@ function WorkspacePanel({ quiz, onClose, onSubmit, onGetHint }) {
                 </ReactMarkdown>
               </div>
 
-              <div className="options-list">
-                {question.options?.map((option, idx) => {
-                  const optionLetter = option.charAt(0)
-                  const isSelected = answers[question.id] === optionLetter
-                  const isCorrect = currentResult && currentResult.correct_answer === optionLetter
-                  const isWrong = currentResult && isSelected && !currentResult.is_correct
-                  
-                  return (
-                    <button
-                      key={idx}
-                      className={`option ${isSelected ? 'selected' : ''} ${isCorrect ? 'correct' : ''} ${isWrong ? 'wrong' : ''}`}
-                      onClick={() => handleSelectAnswer(optionLetter)}
-                      disabled={!!results}
-                    >
-                      <span className="option-marker">{optionLetter}</span>
-                      <span className="option-text">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkMath]}
-                          rehypePlugins={[rehypeKatex]}
-                        >
-                          {option.substring(2).trim()}
-                        </ReactMarkdown>
-                      </span>
-                      {isCorrect && (
-                        <svg className="result-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M20 6L9 17l-5-5"/>
-                        </svg>
+              {/* Multiple Choice Options */}
+              {question.options && question.options.length > 0 ? (
+                <div className="options-list">
+                  {question.options.map((option, idx) => {
+                    const optionLetter = option.charAt(0)
+                    const isSelected = answers[question.id] === optionLetter
+                    const isCorrect = currentResult && currentResult.correct_answer === optionLetter
+                    const isWrong = currentResult && isSelected && !currentResult.is_correct
+                    
+                    return (
+                      <button
+                        key={idx}
+                        className={`option ${isSelected ? 'selected' : ''} ${isCorrect ? 'correct' : ''} ${isWrong ? 'wrong' : ''}`}
+                        onClick={() => handleSelectAnswer(optionLetter)}
+                        disabled={!!results}
+                      >
+                        <span className="option-marker">{optionLetter}</span>
+                        <span className="option-text">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkMath]}
+                            rehypePlugins={[rehypeKatex]}
+                          >
+                            {option.substring(2).trim()}
+                          </ReactMarkdown>
+                        </span>
+                        {isCorrect && (
+                          <svg className="result-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M20 6L9 17l-5-5"/>
+                          </svg>
+                        )}
+                        {isWrong && (
+                          <svg className="result-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                          </svg>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                /* Text Input for Short Answer Questions */
+                <div className="text-answer-section">
+                  <textarea
+                    className={`text-answer-input ${currentResult ? (currentResult.is_correct ? 'correct' : 'incorrect') : ''}`}
+                    placeholder="Type your answer here..."
+                    value={answers[question.id] || ''}
+                    onChange={(e) => handleSelectAnswer(e.target.value)}
+                    disabled={!!results}
+                    rows={3}
+                  />
+                  {currentResult && (
+                    <div className={`answer-feedback ${currentResult.is_correct ? 'correct' : 'incorrect'}`}>
+                      <strong>{currentResult.is_correct ? 'Correct!' : 'Expected answer:'}</strong>
+                      {!currentResult.is_correct && (
+                        <span className="correct-answer">{currentResult.correct_answer}</span>
                       )}
-                      {isWrong && (
-                        <svg className="result-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <line x1="18" y1="6" x2="6" y2="18"/>
-                          <line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {currentResult && currentResult.explanation && (
                 <div className="explanation">
