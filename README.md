@@ -1,4 +1,4 @@
-**RL AI Tutor**
+## RL AI Tutor
 
 An AI-powered tutoring system using reinforcement learning signals from user performance. Built with React frontend and Flask backend, using Groq's DeepSeek model for intelligent tutoring.
 
