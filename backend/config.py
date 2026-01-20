@@ -11,10 +11,10 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
     DEBUG = os.getenv("FLASK_DEBUG", "False").lower() == "true"
     
-    # Database - Railway provides DATABASE_URL
+    # Database - Railway provides DATABASE_URL, SQLite for local dev
     SQLALCHEMY_DATABASE_URI = os.getenv(
         "DATABASE_URL",
-        "postgresql://localhost:5432/rl_tutor"
+        "sqlite:///rl_tutor.db"
     )
     # Railway uses postgres:// but SQLAlchemy needs postgresql://
     if SQLALCHEMY_DATABASE_URI.startswith("postgres://"):

@@ -6,21 +6,21 @@ flask-migrate==4.0.5
 flask-sqlalchemy==3.1.1
 
 # Database
-psycopg2-binary==2.9.9
-sqlalchemy==2.0.23
+# psycopg2-binary==2.9.9  # Uncomment for PostgreSQL
+sqlalchemy>=2.0.35
 
 # AI/ML
-groq==0.4.2
-langchain==0.1.0
-langchain-community==0.0.10
-langchain-groq==0.0.1
-sentence-transformers==2.2.2
-faiss-cpu==1.7.4
+groq>=0.11.0
+langchain>=0.3.0
+langchain-community>=0.3.0
+langchain-groq>=0.2.0
+sentence-transformers>=2.7.0
+faiss-cpu>=1.9.0
 chromadb==0.4.22
 
 # Utilities
 python-dotenv==1.0.0
 numpy==1.26.2
-tiktoken==0.5.2
+tiktoken>=0.7.0
 gunicorn==21.2.0
 redis==5.0.1

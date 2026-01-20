@@ -7,7 +7,7 @@ import json
 import re
 from flask import Blueprint, request, jsonify
 
-from models import db, Session, Message
+from models import db, Session, Message, Quiz
 from services import groq_service, rag_service, trajectory_service
 
 chat_bp = Blueprint("chat", __name__, url_prefix="/api/chat")
@@ -121,8 +121,23 @@ def send_message():
     
     # Check if response contains a quiz
     quiz_data = None
-    if "```json" in ai_content and '"type": "quiz"' in ai_content:
+    if '"questions"' in ai_content or '"type": "quiz"' in ai_content or "{" in ai_content:
         quiz_data = extract_quiz_from_response(ai_content)
+    
+    # If quiz was extracted, save it and replace the raw JSON with a friendly message
+    saved_quiz = None
+    if quiz_data and quiz_data.get("questions"):
+        # Save quiz to database
+        saved_quiz = Quiz(
+            session_id=session_id,
+            title=quiz_data.get("title", "Quiz"),
+            topic=quiz_data.get("topic", "Mathematics"),
+            questions=quiz_data.get("questions", []),
+        )
+        db.session.add(saved_quiz)
+        db.session.commit()
+        
+        ai_content = f"I've prepared a quiz on **{quiz_data.get('topic', 'the topic')}** with {len(quiz_data.get('questions', []))} questions. Take your time and feel free to ask for hints if you get stuck!"
     
     # Save AI message
     ai_msg = Message(
@@ -158,8 +173,25 @@ def send_message():
         "response_time_ms": response.get("response_time_ms", 0),
     }
     
-    if quiz_data:
-        result["quiz"] = quiz_data
+    if saved_quiz:
+        # Sanitize questions (remove correct answers from client)
+        sanitized_questions = []
+        for q in saved_quiz.questions:
+            sanitized_questions.append({
+                "id": q.get("id"),
+                "question": q.get("question"),
+                "type": q.get("type", "multiple_choice"),
+                "options": q.get("options", []),
+                "difficulty": q.get("difficulty", "medium"),
+            })
+        
+        result["quiz"] = {
+            "id": saved_quiz.id,
+            "title": saved_quiz.title,
+            "topic": saved_quiz.topic,
+            "questions": sanitized_questions,
+            "totalQuestions": len(sanitized_questions),
+        }
     
     return jsonify(result)
 
@@ -167,12 +199,25 @@ def send_message():
 def extract_quiz_from_response(content: str) -> dict | None:
     """Extract quiz JSON from AI response."""
     try:
-        # Find JSON block
-        json_match = re.search(r"```json\s*(.*?)\s*```", content, re.DOTALL)
+        # Try to find JSON in code block first
+        json_match = re.search(r"```(?:json)?\s*(.*?)\s*```", content, re.DOTALL)
         if json_match:
             json_str = json_match.group(1)
             quiz_data = json.loads(json_str)
-            if quiz_data.get("type") == "quiz":
+            if quiz_data.get("type") == "quiz" or "questions" in quiz_data:
+                if "type" not in quiz_data:
+                    quiz_data["type"] = "quiz"
+                return quiz_data
+        
+        # Try to find raw JSON object in content
+        start = content.find("{")
+        end = content.rfind("}") + 1
+        if start >= 0 and end > start:
+            json_str = content[start:end]
+            quiz_data = json.loads(json_str)
+            if quiz_data.get("type") == "quiz" or "questions" in quiz_data:
+                if "type" not in quiz_data:
+                    quiz_data["type"] = "quiz"
                 return quiz_data
     except (json.JSONDecodeError, AttributeError):
         pass
