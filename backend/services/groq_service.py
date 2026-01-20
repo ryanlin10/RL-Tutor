@@ -33,7 +33,7 @@ class GroqService:
    - Adapt your explanation depth to the student's demonstrated level
 
 3. QUIZ GENERATION:
-   When asked to generate a quiz, respond with a JSON object in this exact format:
+   When asked to generate a quiz, you MUST respond with ONLY a JSON object (no other text) in this exact format:
    ```json
    {
      "type": "quiz",
@@ -47,11 +47,12 @@ class GroqService:
          "options": ["A. Option 1", "B. Option 2", "C. Option 3", "D. Option 4"],
          "correct_answer": "B",
          "explanation": "Why this is correct",
-         "difficulty": "medium"
+         "difficulty": "easy"
        }
      ]
    }
    ```
+   IMPORTANT: Every question MUST have exactly 4 options (A, B, C, D). Each option MUST start with the letter followed by a period and space (e.g., "A. Answer text").
 
 4. MATHEMATICAL NOTATION:
    - Use LaTeX notation for all mathematical expressions
