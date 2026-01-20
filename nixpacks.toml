@@ -1,5 +1,8 @@
+# Use Python provider with Node
+providers = ["python", "node"]
+
 [phases.setup]
-nixPkgs = ["python311", "nodejs_20", "bash"]
+nixPkgs = ["nodejs_20"]
 
 [phases.install]
 cmds = [
@@ -15,4 +18,4 @@ cmds = [
 ]
 
 [start]
-cmd = "bash start.sh"
+cmd = "cd backend && gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120"
