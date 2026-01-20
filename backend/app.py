@@ -52,9 +52,10 @@ def create_app(config_class=Config):
     )
     
     # Register blueprints
-    from routes import chat_bp, quiz_bp
+    from routes import chat_bp, quiz_bp, documents_bp
     app.register_blueprint(chat_bp)
     app.register_blueprint(quiz_bp)
+    app.register_blueprint(documents_bp)
     
     # Health check endpoint
     @app.route("/health")
@@ -111,9 +112,12 @@ def create_app(config_class=Config):
     def internal_error(error):
         return jsonify({"error": "Internal server error"}), 500
     
-    # Create tables
+    # Create tables and initialize services
     with app.app_context():
         db.create_all()
+        # Initialize RAG service now that we have app context
+        from services import rag_service
+        rag_service._initialize_vector_store()
     
     return app
 

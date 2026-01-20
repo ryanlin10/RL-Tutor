@@ -7,7 +7,7 @@ import re
 from datetime import datetime
 from flask import Blueprint, request, jsonify
 
-from models import db, Quiz, QuizAttempt, Session
+from models import db, Quiz, QuizAttempt, Session, ProblemSheet
 from services import groq_service, rag_service, trajectory_service
 
 quiz_bp = Blueprint("quiz", __name__, url_prefix="/api/quiz")
@@ -36,18 +36,43 @@ def generate_quiz():
         db.session.add(session)
         db.session.commit()
     
-    # Get RAG context for the topic
+    # Get RAG context for the topic (lecture notes)
     rag_context = rag_service.retrieve(
         f"Mathematics {topic} problems exercises examples",
         k=5
     )
+    
+    # Get problem sheets from database for this topic
+    problem_sheets = ProblemSheet.query.filter(
+        ProblemSheet.topic.ilike(f"%{topic}%")
+    ).filter(
+        ProblemSheet.difficulty == difficulty
+    ).limit(3).all()
+    
+    # Build problem sheet context
+    problem_context = ""
+    if problem_sheets:
+        problem_context = "\n\n--- PROBLEM SHEETS ---\n\n"
+        for sheet in problem_sheets:
+            problem_context += f"From {sheet.title}:\n"
+            if sheet.problems:
+                for prob in sheet.problems[:3]:  # First 3 problems per sheet
+                    problem_context += f"Problem: {prob.get('question', '')}\n"
+                    if prob.get('solution'):
+                        problem_context += f"Solution: {prob.get('solution')}\n"
+                    problem_context += "\n"
+    
+    # Combine contexts
+    full_context = rag_context
+    if problem_context:
+        full_context += "\n\n" + problem_context
     
     # Generate quiz
     response = groq_service.generate_quiz(
         topic=topic,
         difficulty=difficulty,
         num_questions=num_questions,
-        context=rag_context,
+        context=full_context,
     )
     
     content = response.get("content", "")

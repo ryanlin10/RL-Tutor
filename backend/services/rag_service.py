@@ -38,10 +38,13 @@ class RAGService:
         )
         
         self.vector_store: Optional[Chroma] = None
-        self._initialize_vector_store()
+        # Don't initialize here - wait for app context
+        # self._initialize_vector_store()
     
     def _initialize_vector_store(self):
         """Initialize or load the vector store from database."""
+        from flask import current_app
+        
         vector_db_path = Path(self.vector_db_path)
         
         # Check if vector store already exists
@@ -60,11 +63,12 @@ class RAGService:
         
         # Try to build from database first
         try:
-            note_count = LectureNote.query.count()
-            if note_count > 0:
-                print(f"Found {note_count} lecture note chunks in database. Building vector store...")
-                self._build_vector_store_from_db()
-                return
+            with current_app.app_context():
+                note_count = LectureNote.query.count()
+                if note_count > 0:
+                    print(f"Found {note_count} lecture note chunks in database. Building vector store...")
+                    self._build_vector_store_from_db()
+                    return
         except Exception as e:
             print(f"Error checking database: {e}")
         
@@ -230,6 +234,7 @@ class RAGService:
     def _build_vector_store_from_db(self):
         """Build vector store from database lecture notes."""
         try:
+            from flask import current_app
             # Get all lecture notes from database
             notes = LectureNote.query.all()
             
@@ -300,7 +305,7 @@ class RAGService:
                 
                 self.vector_store.add_documents(documents)
                 print(f"Synced {len(documents)} new chunks from database")
-                
+            
         except Exception as e:
             print(f"Error syncing from database: {e}")
     
