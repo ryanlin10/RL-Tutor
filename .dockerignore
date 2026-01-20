@@ -1,0 +1,50 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+DOCUMENT_*.md
+RAILWAY_*.md
+
+# Environment
+.env
+.env.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Node
+node_modules/
+npm-debug.log
+frontend/node_modules/
+frontend/dist/
+
+# Data (will be in database)
+data/lecture_notes/*
+data/vector_store/*
+!data/lecture_notes/.gitkeep
+!data/vector_store/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.log
+dist/
+build/

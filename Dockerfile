@@ -2,7 +2,7 @@
 FROM node:20-alpine AS frontend-build
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm ci
+RUN npm ci --prefer-offline --no-audit
 COPY frontend/ ./
 RUN npm run build
 
@@ -10,13 +10,17 @@ RUN npm run build
 FROM python:3.11-slim
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies in one layer (cache this)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# Copy backend requirements and install
-COPY backend/requirements.txt ./backend/
+# Upgrade pip first (cache this)
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Copy backend requirements and install (cache this layer separately)
+COPY backend/requirements.txt ./backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
 # Copy backend code
@@ -26,16 +30,22 @@ COPY backend/ ./backend/
 COPY --from=frontend-build /app/frontend/dist ./backend/static
 
 # Create data directories
-RUN mkdir -p /app/data/lecture_notes /app/data/vector_store
+RUN mkdir -p /app/data/lecture_notes /app/data/vector_store && \
+    chmod -R 755 /app/data
 
 # Set working directory to backend
 WORKDIR /app/backend
 
-# Expose port (Railway uses PORT env var)
-EXPOSE ${PORT:-5000}
+# Expose port
+EXPOSE 5000
 
-# Environment variable for port
+# Environment variables
 ENV PORT=5000
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
 
-# Start command - uses shell form to expand $PORT
-CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+# Railway handles health checks via railway.json
+# No need for Docker HEALTHCHECK
+
+# Start command - use exec form for proper signal handling
+CMD ["sh", "-c", "gunicorn app:app --bind 0.0.0.0:${PORT:-5000} --workers 2 --threads 4 --timeout 120 --access-logfile - --error-logfile -"]

@@ -57,10 +57,14 @@ def create_app(config_class=Config):
     app.register_blueprint(quiz_bp)
     app.register_blueprint(documents_bp)
     
-    # Health check endpoint
+    # Health check endpoint (fast, no dependencies, no DB queries)
     @app.route("/health")
     def health():
-        return jsonify({"status": "healthy", "service": "rl-tutor-api"})
+        """Fast health check - no database queries to avoid timeouts."""
+        return jsonify({
+            "status": "healthy",
+            "service": "rl-tutor-api"
+        }), 200
     
     # API info endpoint
     @app.route("/api")
@@ -112,12 +116,11 @@ def create_app(config_class=Config):
     def internal_error(error):
         return jsonify({"error": "Internal server error"}), 500
     
-    # Create tables and initialize services
+    # Create tables
     with app.app_context():
         db.create_all()
-        # Initialize RAG service now that we have app context
-        from services import rag_service
-        rag_service._initialize_vector_store()
+        # RAG service will initialize lazily on first use
+        # Don't block startup with RAG initialization
     
     return app
 

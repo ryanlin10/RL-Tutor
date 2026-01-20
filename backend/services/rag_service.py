@@ -38,48 +38,64 @@ class RAGService:
         )
         
         self.vector_store: Optional[Chroma] = None
+        self._initialized = False
         # Don't initialize here - wait for app context
-        # self._initialize_vector_store()
     
     def _initialize_vector_store(self):
         """Initialize or load the vector store from database."""
-        from flask import current_app
+        if self._initialized:
+            return  # Already initialized
         
-        vector_db_path = Path(self.vector_db_path)
-        
-        # Check if vector store already exists
-        if vector_db_path.exists() and any(vector_db_path.iterdir()):
-            try:
-                self.vector_store = Chroma(
-                    persist_directory=str(vector_db_path),
-                    embedding_function=self.embeddings,
-                )
-                print(f"Loaded existing vector store from {vector_db_path}")
-                # Sync with database if needed
-                self._sync_from_database()
-                return
-            except Exception as e:
-                print(f"Error loading vector store: {e}")
-        
-        # Try to build from database first
         try:
-            with current_app.app_context():
-                note_count = LectureNote.query.count()
-                if note_count > 0:
-                    print(f"Found {note_count} lecture note chunks in database. Building vector store...")
-                    self._build_vector_store_from_db()
+            from flask import current_app
+            
+            vector_db_path = Path(self.vector_db_path)
+            
+            # Ensure directory exists
+            vector_db_path.mkdir(parents=True, exist_ok=True)
+            
+            # Check if vector store already exists
+            if vector_db_path.exists() and any(vector_db_path.iterdir()):
+                try:
+                    self.vector_store = Chroma(
+                        persist_directory=str(vector_db_path),
+                        embedding_function=self.embeddings,
+                    )
+                    print(f"Loaded existing vector store from {vector_db_path}")
+                    # Sync with database if needed (non-blocking)
+                    try:
+                        self._sync_from_database()
+                    except Exception as e:
+                        print(f"Warning: Could not sync from database: {e}")
                     return
+                except Exception as e:
+                    print(f"Error loading vector store: {e}")
+            
+            # Try to build from database first
+            try:
+                with current_app.app_context():
+                    note_count = LectureNote.query.count()
+                    if note_count > 0:
+                        print(f"Found {note_count} lecture note chunks in database. Building vector store...")
+                        self._build_vector_store_from_db()
+                        return
+            except Exception as e:
+                print(f"Error checking database: {e}")
+            
+            # Fallback: try file system
+            lecture_path = Path(self.lecture_notes_path)
+            if lecture_path.exists() and any(lecture_path.iterdir()):
+                print("Building vector store from file system...")
+                self._build_vector_store()
+            else:
+                print("No lecture notes found. RAG will be disabled.")
+                self.vector_store = None
+                
         except Exception as e:
-            print(f"Error checking database: {e}")
-        
-        # Fallback: try file system
-        lecture_path = Path(self.lecture_notes_path)
-        if lecture_path.exists() and any(lecture_path.iterdir()):
-            print("Building vector store from file system...")
-            self._build_vector_store()
-        else:
-            print("No lecture notes found. RAG will be disabled.")
+            print(f"Error initializing vector store: {e}. RAG will be disabled.")
             self.vector_store = None
+        finally:
+            self._initialized = True
     
     def _build_vector_store(self):
         """Build vector store from lecture notes."""
@@ -158,6 +174,11 @@ class RAGService:
         Returns:
             Concatenated relevant context string
         """
+        # Lazy initialization on first use
+        if not self._initialized:
+            self._initialize_vector_store()
+            self._initialized = True
+        
         if self.vector_store is None:
             return ""
         
