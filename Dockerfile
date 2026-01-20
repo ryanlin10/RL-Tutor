@@ -19,9 +19,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Upgrade pip first (cache this)
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
-# Copy backend requirements and install (cache this layer separately)
+# Copy backend requirements and install CPU-only PyTorch (cache this layer separately)
 COPY backend/requirements.txt ./backend/requirements.txt
-RUN pip install --no-cache-dir -r backend/requirements.txt
+RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu -r backend/requirements.txt
 
 # Copy backend code
 COPY backend/ ./backend/

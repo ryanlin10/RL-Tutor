@@ -1,3 +1,8 @@
+# Use CPU-only PyTorch (avoids downloading 5GB+ GPU version)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
+
 # Flask and extensions
 flask==3.0.0
 flask-cors==4.0.0
