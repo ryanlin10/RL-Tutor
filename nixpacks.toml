@@ -1,0 +1,18 @@
+[phases.setup]
+nixPkgs = ["python311", "nodejs_20", "bash"]
+
+[phases.install]
+cmds = [
+    "cd frontend && npm ci",
+    "pip install -r backend/requirements.txt"
+]
+
+[phases.build]
+cmds = [
+    "cd frontend && npm run build",
+    "mkdir -p backend/static",
+    "cp -r frontend/dist/* backend/static/"
+]
+
+[start]
+cmd = "bash start.sh"

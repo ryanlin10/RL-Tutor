@@ -3,7 +3,7 @@ Flask application for RL Tutor - AI-powered mathematics tutoring.
 """
 
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_migrate import Migrate
 from flask_limiter import Limiter
@@ -15,7 +15,13 @@ from models import db
 
 def create_app(config_class=Config):
     """Application factory."""
-    app = Flask(__name__)
+    # Check if static folder exists (built frontend)
+    static_folder = os.path.join(os.path.dirname(__file__), 'static')
+    if os.path.exists(static_folder):
+        app = Flask(__name__, static_folder='static', static_url_path='')
+    else:
+        app = Flask(__name__)
+    
     app.config.from_object(config_class)
     
     # Initialize extensions
@@ -79,9 +85,19 @@ def create_app(config_class=Config):
             },
         })
     
+    # Serve React frontend (for production)
+    @app.route('/')
+    def serve_frontend():
+        if app.static_folder and os.path.exists(os.path.join(app.static_folder, 'index.html')):
+            return send_from_directory(app.static_folder, 'index.html')
+        return jsonify({"message": "RL Tutor API", "docs": "/api"})
+    
     # Error handlers
     @app.errorhandler(404)
     def not_found(error):
+        # For SPA routing - serve index.html for non-API routes
+        if app.static_folder and os.path.exists(os.path.join(app.static_folder, 'index.html')):
+            return send_from_directory(app.static_folder, 'index.html')
         return jsonify({"error": "Not found"}), 404
     
     @app.errorhandler(429)
