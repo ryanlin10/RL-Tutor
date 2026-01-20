@@ -1,6 +1,6 @@
-# Learnr.ai - AI Mathematics Tutor
+**RL AI Tutor**
 
-An AI-powered mathematics tutoring system using reinforcement learning signals from user performance. Built with React frontend and Flask backend, using Groq's DeepSeek model for intelligent tutoring.
+An AI-powered tutoring system using reinforcement learning signals from user performance. Built with React frontend and Flask backend, using Groq's DeepSeek model for intelligent tutoring.
 
 ## Architecture
 
