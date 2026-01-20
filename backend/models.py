@@ -128,3 +128,81 @@ class UserPerformance(db.Model):
     first_attempt_at = db.Column(db.DateTime)
     last_attempt_at = db.Column(db.DateTime)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class LectureNote(db.Model):
+    """
+    Lecture notes stored in database for RAG retrieval.
+    Chunks are stored with embeddings metadata.
+    """
+    
+    __tablename__ = "lecture_notes"
+    
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    
+    # Document metadata
+    title = db.Column(db.String(500), nullable=False)
+    topic = db.Column(db.String(200), nullable=False)
+    source_file = db.Column(db.String(500))  # Original filename
+    page_number = db.Column(db.Integer)  # For PDFs
+    
+    # Content
+    content = db.Column(db.Text, nullable=False)  # The actual text chunk
+    chunk_index = db.Column(db.Integer)  # Order within document
+    
+    # Embedding metadata (stored in ChromaDB, but we track here)
+    embedding_id = db.Column(db.String(100))  # Reference to ChromaDB embedding
+    
+    # Metadata
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Indexes for faster queries
+    __table_args__ = (
+        db.Index('idx_lecture_topic', 'topic'),
+        db.Index('idx_lecture_title', 'title'),
+    )
+
+
+class ProblemSheet(db.Model):
+    """
+    Oxford Maths problem sheets stored in database.
+    Used for generating quiz questions.
+    """
+    
+    __tablename__ = "problem_sheets"
+    
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    
+    # Metadata
+    title = db.Column(db.String(500), nullable=False)
+    topic = db.Column(db.String(200), nullable=False)
+    course_code = db.Column(db.String(50))  # e.g., "MATH101"
+    year = db.Column(db.Integer)  # Academic year
+    difficulty = db.Column(db.String(20))  # easy, medium, hard
+    
+    # Content - stored as JSON array of problems
+    problems = db.Column(db.JSON, nullable=False)
+    # Format: [
+    #   {
+    #     "id": 1,
+    #     "question": "Problem text...",
+    #     "type": "proof|computation|application",
+    #     "difficulty": "medium",
+    #     "solution": "Solution text...",
+    #     "tags": ["linear-algebra", "matrices"]
+    #   }
+    # ]
+    
+    # Metadata
+    source_file = db.Column(db.String(500))  # Original filename
+    uploaded_by = db.Column(db.String(100))  # Admin/user identifier
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Indexes
+    __table_args__ = (
+        db.Index('idx_problem_topic', 'topic'),
+        db.Index('idx_problem_difficulty', 'difficulty'),
+        db.Index('idx_problem_course', 'course_code'),
+    )

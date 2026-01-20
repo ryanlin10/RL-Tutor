@@ -1,10 +1,12 @@
 """
 RAG (Retrieval Augmented Generation) service for Oxford maths lecture notes.
+Uses database for storage and ChromaDB for vector search.
 """
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
+import uuid
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import (
@@ -14,8 +16,10 @@ from langchain_community.document_loaders import (
 )
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
+from langchain.schema import Document
 
 from config import Config
+from models import db, LectureNote
 
 
 class RAGService:
@@ -37,7 +41,7 @@ class RAGService:
         self._initialize_vector_store()
     
     def _initialize_vector_store(self):
-        """Initialize or load the vector store."""
+        """Initialize or load the vector store from database."""
         vector_db_path = Path(self.vector_db_path)
         
         # Check if vector store already exists
@@ -48,16 +52,29 @@ class RAGService:
                     embedding_function=self.embeddings,
                 )
                 print(f"Loaded existing vector store from {vector_db_path}")
+                # Sync with database if needed
+                self._sync_from_database()
                 return
             except Exception as e:
                 print(f"Error loading vector store: {e}")
         
-        # Create new vector store if lecture notes exist
+        # Try to build from database first
+        try:
+            note_count = LectureNote.query.count()
+            if note_count > 0:
+                print(f"Found {note_count} lecture note chunks in database. Building vector store...")
+                self._build_vector_store_from_db()
+                return
+        except Exception as e:
+            print(f"Error checking database: {e}")
+        
+        # Fallback: try file system
         lecture_path = Path(self.lecture_notes_path)
         if lecture_path.exists() and any(lecture_path.iterdir()):
+            print("Building vector store from file system...")
             self._build_vector_store()
         else:
-            print(f"No lecture notes found at {lecture_path}. RAG will be disabled.")
+            print("No lecture notes found. RAG will be disabled.")
             self.vector_store = None
     
     def _build_vector_store(self):
@@ -210,14 +227,151 @@ class RAGService:
             print(f"Error adding documents: {e}")
             return False
     
+    def _build_vector_store_from_db(self):
+        """Build vector store from database lecture notes."""
+        try:
+            # Get all lecture notes from database
+            notes = LectureNote.query.all()
+            
+            if not notes:
+                print("No lecture notes in database.")
+                return
+            
+            # Convert to LangChain documents
+            documents = []
+            for note in notes:
+                doc = Document(
+                    page_content=note.content,
+                    metadata={
+                        "source": note.source_file or note.title,
+                        "topic": note.topic,
+                        "title": note.title,
+                        "page_number": note.page_number,
+                        "chunk_index": note.chunk_index,
+                        "db_id": note.id,
+                    }
+                )
+                documents.append(doc)
+            
+            # Create or update vector store
+            vector_db_path = Path(self.vector_db_path)
+            vector_db_path.mkdir(parents=True, exist_ok=True)
+            
+            if self.vector_store is None:
+                self.vector_store = Chroma.from_documents(
+                    documents=documents,
+                    embedding=self.embeddings,
+                    persist_directory=str(vector_db_path),
+                )
+            else:
+                self.vector_store.add_documents(documents)
+            
+            print(f"Vector store built from {len(documents)} database chunks")
+            
+        except Exception as e:
+            print(f"Error building vector store from database: {e}")
+    
+    def _sync_from_database(self):
+        """Sync vector store with database (add any new notes)."""
+        try:
+            if self.vector_store is None:
+                return
+            
+            # Get notes that don't have embeddings yet
+            notes = LectureNote.query.filter(
+                LectureNote.embedding_id.is_(None)
+            ).all()
+            
+            if notes:
+                documents = []
+                for note in notes:
+                    doc = Document(
+                        page_content=note.content,
+                        metadata={
+                            "source": note.source_file or note.title,
+                            "topic": note.topic,
+                            "title": note.title,
+                            "page_number": note.page_number,
+                            "chunk_index": note.chunk_index,
+                            "db_id": note.id,
+                        }
+                    )
+                    documents.append(doc)
+                
+                self.vector_store.add_documents(documents)
+                print(f"Synced {len(documents)} new chunks from database")
+                
+        except Exception as e:
+            print(f"Error syncing from database: {e}")
+    
+    def add_lecture_note_to_db(
+        self,
+        title: str,
+        topic: str,
+        content: str,
+        source_file: Optional[str] = None,
+        page_number: Optional[int] = None,
+        chunk_index: Optional[int] = None
+    ) -> LectureNote:
+        """
+        Add a lecture note chunk to the database.
+        
+        Args:
+            title: Document title
+            topic: Mathematical topic
+            content: Text content
+            source_file: Original filename
+            page_number: Page number (for PDFs)
+            chunk_index: Chunk order within document
+            
+        Returns:
+            Created LectureNote object
+        """
+        note = LectureNote(
+            title=title,
+            topic=topic,
+            content=content,
+            source_file=source_file,
+            page_number=page_number,
+            chunk_index=chunk_index,
+        )
+        db.session.add(note)
+        db.session.commit()
+        
+        # Add to vector store
+        if self.vector_store:
+            doc = Document(
+                page_content=content,
+                metadata={
+                    "source": source_file or title,
+                    "topic": topic,
+                    "title": title,
+                    "page_number": page_number,
+                    "chunk_index": chunk_index,
+                    "db_id": note.id,
+                }
+            )
+            self.vector_store.add_documents([doc])
+            # Update embedding_id (ChromaDB handles this internally)
+        
+        return note
+    
     def get_topics(self) -> list[str]:
         """
-        Get list of available topics based on indexed documents.
+        Get list of available topics from database.
         
         Returns:
             List of topic names
         """
-        # Default Oxford Maths topics
+        try:
+            # Get unique topics from database
+            topics = db.session.query(LectureNote.topic).distinct().all()
+            if topics:
+                return [t[0] for t in topics if t[0]]
+        except Exception as e:
+            print(f"Error getting topics from database: {e}")
+        
+        # Fallback to default topics
         return [
             "Linear Algebra",
             "Analysis",
