@@ -1,0 +1,69 @@
+/* App Layout */
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg-primary);
+}
+
+.main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  height: calc(100vh - 56px);
+}
+
+/* Panel transitions */
+.main-content > * {
+  transition: width 0.3s ease, opacity 0.2s ease;
+}
+
+.main-content.workspace-open .chat-panel {
+  width: 50%;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.main-content:not(.workspace-open) .chat-panel {
+  width: 100%;
+}
+
+.main-content.workspace-open .workspace-panel {
+  width: 50%;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .main-content.workspace-open .chat-panel,
+  .main-content.workspace-open .workspace-panel {
+    width: 50%;
+  }
+}
+
+@media (max-width: 768px) {
+  .main-content.workspace-open {
+    flex-direction: column;
+  }
+  
+  .main-content.workspace-open .chat-panel,
+  .main-content.workspace-open .workspace-panel {
+    width: 100%;
+    height: 50%;
+  }
+  
+  .main-content.workspace-open .chat-panel {
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+}

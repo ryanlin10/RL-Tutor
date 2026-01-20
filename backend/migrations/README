@@ -1,0 +1,18 @@
+Database Migrations
+===================
+
+This directory contains Flask-Migrate database migrations.
+
+To initialize migrations (first time only):
+    flask db init
+
+To create a new migration after model changes:
+    flask db migrate -m "Description of changes"
+
+To apply migrations:
+    flask db upgrade
+
+To rollback:
+    flask db downgrade
+
+Railway automatically runs migrations on deployment via the Procfile release command.
