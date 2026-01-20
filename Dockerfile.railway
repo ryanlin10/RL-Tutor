@@ -1,2 +1,0 @@
-# This file ensures Railway uses Dockerfile
-# Railway will detect Dockerfile and use it instead of Nixpacks
