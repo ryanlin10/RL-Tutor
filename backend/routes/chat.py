@@ -136,81 +136,81 @@ def send_message():
             }), 500
         
         ai_content = response.get("content", "I apologize, I couldn't generate a response.")
-    
-    # Check if response contains a quiz
-    quiz_data = None
-    if '"questions"' in ai_content or '"type": "quiz"' in ai_content or "{" in ai_content:
-        quiz_data = extract_quiz_from_response(ai_content)
-    
-    # If quiz was extracted, save it and replace the raw JSON with a friendly message
-    saved_quiz = None
-    if quiz_data and quiz_data.get("questions"):
-        # Save quiz to database
-        saved_quiz = Quiz(
+        
+        # Check if response contains a quiz
+        quiz_data = None
+        if '"questions"' in ai_content or '"type": "quiz"' in ai_content or "{" in ai_content:
+            quiz_data = extract_quiz_from_response(ai_content)
+        
+        # If quiz was extracted, save it and replace the raw JSON with a friendly message
+        saved_quiz = None
+        if quiz_data and quiz_data.get("questions"):
+            # Save quiz to database
+            saved_quiz = Quiz(
+                session_id=session_id,
+                title=quiz_data.get("title", "Quiz"),
+                topic=quiz_data.get("topic", "Mathematics"),
+                questions=quiz_data.get("questions", []),
+            )
+            db.session.add(saved_quiz)
+            db.session.commit()
+            
+            ai_content = f"I've prepared a quiz on **{quiz_data.get('topic', 'the topic')}** with {len(quiz_data.get('questions', []))} questions. Take your time and feel free to ask for hints if you get stuck!"
+        
+        # Save AI message
+        ai_msg = Message(
             session_id=session_id,
-            title=quiz_data.get("title", "Quiz"),
-            topic=quiz_data.get("topic", "Mathematics"),
-            questions=quiz_data.get("questions", []),
+            role="assistant",
+            content=ai_content,
+            tokens_used=response.get("total_tokens", 0),
+            response_time_ms=response.get("response_time_ms", 0),
         )
-        db.session.add(saved_quiz)
+        db.session.add(ai_msg)
         db.session.commit()
         
-        ai_content = f"I've prepared a quiz on **{quiz_data.get('topic', 'the topic')}** with {len(quiz_data.get('questions', []))} questions. Take your time and feel free to ask for hints if you get stuck!"
-    
-    # Save AI message
-    ai_msg = Message(
-        session_id=session_id,
-        role="assistant",
-        content=ai_content,
-        tokens_used=response.get("total_tokens", 0),
-        response_time_ms=response.get("response_time_ms", 0),
-    )
-    db.session.add(ai_msg)
-    db.session.commit()
-    
-    # Record trajectory
-    action = {
-        "action_type": "quiz_generation" if quiz_data else "response",
-        "content": ai_content,
-        "has_quiz": quiz_data is not None,
-    }
-    
-    trajectory_service.record_trajectory(
-        session_id=session_id,
-        state=state,
-        action=action,
-        model_name=response.get("model", "unknown"),
-        prompt_tokens=response.get("prompt_tokens", 0),
-        completion_tokens=response.get("completion_tokens", 0),
-    )
-    
-    result = {
-        "message_id": ai_msg.id,
-        "content": ai_content,
-        "tokens_used": response.get("total_tokens", 0),
-        "response_time_ms": response.get("response_time_ms", 0),
-    }
-    
-    if saved_quiz:
-        # Sanitize questions (remove correct answers from client)
-        sanitized_questions = []
-        for q in saved_quiz.questions:
-            sanitized_questions.append({
-                "id": q.get("id"),
-                "question": q.get("question"),
-                "type": q.get("type", "multiple_choice"),
-                "options": q.get("options", []),
-                "difficulty": q.get("difficulty", "medium"),
-            })
-        
-        result["quiz"] = {
-            "id": saved_quiz.id,
-            "title": saved_quiz.title,
-            "topic": saved_quiz.topic,
-            "questions": sanitized_questions,
-            "totalQuestions": len(sanitized_questions),
+        # Record trajectory
+        action = {
+            "action_type": "quiz_generation" if quiz_data else "response",
+            "content": ai_content,
+            "has_quiz": quiz_data is not None,
         }
-    
+        
+        trajectory_service.record_trajectory(
+            session_id=session_id,
+            state=state,
+            action=action,
+            model_name=response.get("model", "unknown"),
+            prompt_tokens=response.get("prompt_tokens", 0),
+            completion_tokens=response.get("completion_tokens", 0),
+        )
+        
+        result = {
+            "message_id": ai_msg.id,
+            "content": ai_content,
+            "tokens_used": response.get("total_tokens", 0),
+            "response_time_ms": response.get("response_time_ms", 0),
+        }
+        
+        if saved_quiz:
+            # Sanitize questions (remove correct answers from client)
+            sanitized_questions = []
+            for q in saved_quiz.questions:
+                sanitized_questions.append({
+                    "id": q.get("id"),
+                    "question": q.get("question"),
+                    "type": q.get("type", "multiple_choice"),
+                    "options": q.get("options", []),
+                    "difficulty": q.get("difficulty", "medium"),
+                })
+            
+            result["quiz"] = {
+                "id": saved_quiz.id,
+                "title": saved_quiz.title,
+                "topic": saved_quiz.topic,
+                "questions": sanitized_questions,
+                "totalQuestions": len(sanitized_questions),
+            }
+        
         return jsonify(result)
     
     except Exception as e:
