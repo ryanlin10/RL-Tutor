@@ -27,16 +27,13 @@ def create_app(config_class=Config):
     # Initialize extensions
     db.init_app(app)
     
-    # CORS - allow frontend origins
+    # CORS - allow all origins in production (frontend served from same origin)
     CORS(app, resources={
         r"/api/*": {
-            "origins": [
-                "http://localhost:3000",
-                "http://localhost:5173",
-                "https://*.railway.app",
-            ],
+            "origins": "*",
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": False,
         }
     })
     

@@ -62,62 +62,80 @@ def get_session(session_id):
 @chat_bp.route("/message", methods=["POST"])
 def send_message():
     """Send a message to the AI tutor and get a response."""
-    data = request.get_json()
-    
-    if not data:
-        return jsonify({"error": "Request body required"}), 400
-    
-    session_id = data.get("session_id")
-    user_message = data.get("message", "").strip()
-    
-    if not session_id:
-        return jsonify({"error": "session_id required"}), 400
-    if not user_message:
-        return jsonify({"error": "message required"}), 400
-    
-    # Get or create session
-    session = Session.query.get(session_id)
-    if not session:
-        session = Session(id=session_id)
-        db.session.add(session)
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({"error": "Request body required"}), 400
+        
+        session_id = data.get("session_id")
+        user_message = data.get("message", "").strip()
+        
+        if not session_id:
+            return jsonify({"error": "session_id required"}), 400
+        if not user_message:
+            return jsonify({"error": "message required"}), 400
+        
+        # Get or create session
+        session = Session.query.get(session_id)
+        if not session:
+            session = Session(id=session_id)
+            db.session.add(session)
+            db.session.commit()
+        
+        # Save user message
+        user_msg = Message(
+            session_id=session_id,
+            role="user",
+            content=user_message,
+        )
+        db.session.add(user_msg)
         db.session.commit()
-    
-    # Save user message
-    user_msg = Message(
-        session_id=session_id,
-        role="user",
-        content=user_message,
-    )
-    db.session.add(user_msg)
-    db.session.commit()
-    
-    # Get conversation history
-    history = Message.query.filter_by(session_id=session_id).order_by(
-        Message.created_at
-    ).all()
-    
-    messages = [
-        {"role": m.role, "content": m.content}
-        for m in history
-    ]
-    
-    # Get RAG context if relevant
-    rag_context = rag_service.retrieve(user_message, k=3)
-    
-    # Build state for trajectory
-    state = {
-        "conversation_history": messages[-10:],  # Last 10 messages
-        "current_query": user_message,
-        "rag_context_available": bool(rag_context),
-    }
-    
-    # Get AI response
-    response = groq_service.chat(
-        messages=messages,
-        rag_context=rag_context,
-    )
-    
-    ai_content = response.get("content", "I apologize, I couldn't generate a response.")
+        
+        # Get conversation history
+        history = Message.query.filter_by(session_id=session_id).order_by(
+            Message.created_at
+        ).all()
+        
+        messages = [
+            {"role": m.role, "content": m.content}
+            for m in history
+        ]
+        
+        # Get RAG context if relevant (don't fail if RAG has issues)
+        try:
+            rag_context = rag_service.retrieve(user_message, k=3)
+        except Exception as e:
+            print(f"RAG retrieval error: {e}")
+            rag_context = ""
+        
+        # Build state for trajectory
+        state = {
+            "conversation_history": messages[-10:],  # Last 10 messages
+            "current_query": user_message,
+            "rag_context_available": bool(rag_context),
+        }
+        
+        # Get AI response
+        try:
+            response = groq_service.chat(
+                messages=messages,
+                rag_context=rag_context,
+            )
+        except ValueError as e:
+            # GROQ_API_KEY not set
+            return jsonify({
+                "error": str(e),
+                "content": "I apologize, but the AI service is not configured. Please contact the administrator.",
+            }), 500
+        except Exception as e:
+            print(f"Groq API error: {e}")
+            return jsonify({
+                "error": str(e),
+                "content": f"I apologize, but I encountered an error: {str(e)}",
+            }), 500
+        
+        ai_content = response.get("content", "I apologize, I couldn't generate a response.")
     
     # Check if response contains a quiz
     quiz_data = None
@@ -193,7 +211,16 @@ def send_message():
             "totalQuestions": len(sanitized_questions),
         }
     
-    return jsonify(result)
+        return jsonify(result)
+    
+    except Exception as e:
+        print(f"Error in send_message: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "error": str(e),
+            "content": f"I apologize, but an unexpected error occurred: {str(e)}",
+        }), 500
 
 
 def extract_quiz_from_response(content: str) -> dict | None:

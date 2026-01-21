@@ -5,7 +5,8 @@ import ChatPanel from './components/ChatPanel'
 import WorkspacePanel from './components/WorkspacePanel'
 import './styles/App.css'
 
-const API_BASE = '/api'
+// In production, use same origin. In dev, Vite proxy handles it.
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
 function App() {
   const [sessionId, setSessionId] = useState(null)
@@ -67,6 +68,7 @@ function App() {
     setIsLoading(true)
 
     try {
+      console.log('Sending message to:', `${API_BASE}/chat/message`)
       const response = await fetch(`${API_BASE}/chat/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -76,33 +78,38 @@ function App() {
         }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        
-        // Add AI response
-        const aiMessage = {
-          id: uuidv4(),
-          role: 'assistant',
-          content: data.content,
-          timestamp: new Date(),
-          tokensUsed: data.tokens_used,
-        }
-        setMessages(prev => [...prev, aiMessage])
+      console.log('Response status:', response.status)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('API error response:', errorText)
+        throw new Error(`Server error: ${response.status}`)
+      }
 
-        // Check if response contains a quiz
-        if (data.quiz) {
-          setQuiz(data.quiz)
-          setIsWorkspaceOpen(true)
-        }
-      } else {
-        throw new Error('Failed to get response')
+      const data = await response.json()
+      console.log('Response data:', data)
+      
+      // Add AI response
+      const aiMessage = {
+        id: uuidv4(),
+        role: 'assistant',
+        content: data.content || 'No response received',
+        timestamp: new Date(),
+        tokensUsed: data.tokens_used,
+      }
+      setMessages(prev => [...prev, aiMessage])
+
+      // Check if response contains a quiz
+      if (data.quiz) {
+        setQuiz(data.quiz)
+        setIsWorkspaceOpen(true)
       }
     } catch (error) {
       console.error('Error sending message:', error)
       setMessages(prev => [...prev, {
         id: uuidv4(),
         role: 'assistant',
-        content: "I apologize, but I'm having trouble connecting to the server. Please try again.",
+        content: `I apologize, but I'm having trouble connecting to the server. Error: ${error.message}. Please check the console for details.`,
         timestamp: new Date(),
         isError: true,
       }])

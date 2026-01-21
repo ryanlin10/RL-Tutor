@@ -16,20 +16,6 @@ class GroqService:
     def __init__(self):
         self.model = Config.GROQ_MODEL
         self._client = None
-    
-    @property
-    def client(self):
-        """Lazy initialization of Groq client."""
-        if self._client is None:
-            api_key = Config.GROQ_API_KEY
-            if not api_key:
-                raise ValueError(
-                    "GROQ_API_KEY not set. "
-                    "Get your API key from https://console.groq.com/keys"
-                )
-            self._client = Groq(api_key=api_key)
-        return self._client
-        
         self.system_prompt = """You are Dr. Turing, an expert AI mathematics tutor specializing in university-level mathematics, particularly Oxford Mathematics curriculum. Your role is to:
 
 1. TEACHING STYLE:
@@ -78,6 +64,19 @@ class GroqService:
    - Adjust difficulty based on demonstrated understanding
 
 You have access to Oxford Mathematics lecture notes for accurate content."""
+    
+    @property
+    def client(self):
+        """Lazy initialization of Groq client."""
+        if self._client is None:
+            api_key = Config.GROQ_API_KEY
+            if not api_key:
+                raise ValueError(
+                    "GROQ_API_KEY not set. "
+                    "Get your API key from https://console.groq.com/keys"
+                )
+            self._client = Groq(api_key=api_key)
+        return self._client
     
     def chat(
         self,
