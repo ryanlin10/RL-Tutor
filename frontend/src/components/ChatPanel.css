@@ -130,6 +130,21 @@
   background: var(--bg-tertiary);
 }
 
+/* Math equation styling within messages */
+.message-content .katex-display {
+  margin: var(--space-3) 0;
+  text-align: left;
+}
+
+.message-content .katex {
+  text-align: left;
+}
+
+.message.user .message-content .katex-display {
+  background: rgba(0, 0, 0, 0.15);
+  border-left-color: var(--accent-secondary);
+}
+
 .message-time {
   display: block;
   margin-top: var(--space-2);

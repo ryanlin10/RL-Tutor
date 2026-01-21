@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import { preprocessLatex } from '../utils/latexPreprocess'
 import './ChatPanel.css'
 
 function ChatPanel({ messages, onSendMessage, onGenerateQuiz, isLoading, isExpanded }) {
@@ -92,7 +93,7 @@ function ChatPanel({ messages, onSendMessage, onGenerateQuiz, isLoading, isExpan
                 remarkPlugins={[remarkMath]}
                 rehypePlugins={[rehypeKatex]}
               >
-                {message.content}
+                {preprocessLatex(message.content)}
               </ReactMarkdown>
               <span className="message-time">
                 {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

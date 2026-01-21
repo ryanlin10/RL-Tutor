@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import { preprocessLatex } from '../utils/latexPreprocess'
 import './WorkspacePanel.css'
 
 function WorkspacePanel({ quiz, onClose, onSubmit, onGetHint }) {
@@ -142,7 +143,7 @@ function WorkspacePanel({ quiz, onClose, onSubmit, onGetHint }) {
                   remarkPlugins={[remarkMath]}
                   rehypePlugins={[rehypeKatex]}
                 >
-                  {question.question}
+                  {preprocessLatex(question.question)}
                 </ReactMarkdown>
               </div>
 
@@ -168,7 +169,7 @@ function WorkspacePanel({ quiz, onClose, onSubmit, onGetHint }) {
                             remarkPlugins={[remarkMath]}
                             rehypePlugins={[rehypeKatex]}
                           >
-                            {option.substring(2).trim()}
+                            {preprocessLatex(option.substring(2).trim())}
                           </ReactMarkdown>
                         </span>
                         {isCorrect && (
@@ -215,7 +216,7 @@ function WorkspacePanel({ quiz, onClose, onSubmit, onGetHint }) {
                     remarkPlugins={[remarkMath]}
                     rehypePlugins={[rehypeKatex]}
                   >
-                    {currentResult.explanation}
+                    {preprocessLatex(currentResult.explanation)}
                   </ReactMarkdown>
                 </div>
               )}

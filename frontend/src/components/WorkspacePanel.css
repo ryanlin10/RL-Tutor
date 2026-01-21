@@ -187,6 +187,12 @@
   margin-bottom: 0;
 }
 
+/* Math equation styling in questions */
+.question-text .katex-display {
+  margin: var(--space-3) 0;
+  background: var(--bg-secondary);
+}
+
 /* Options */
 .options-list {
   display: flex;
@@ -269,6 +275,18 @@
 
 .option-text p {
   margin: 0;
+}
+
+/* Math in options - compact styling */
+.option-text .katex-display {
+  margin: var(--space-2) 0;
+  padding: var(--space-2);
+  background: transparent;
+  border-left: none;
+}
+
+.option-text .katex {
+  font-size: 1em;
 }
 
 .result-icon {
@@ -372,6 +390,20 @@
   display: block;
   color: var(--text-primary);
   margin-bottom: var(--space-2);
+}
+
+.explanation p {
+  margin-bottom: var(--space-2);
+}
+
+.explanation p:last-child {
+  margin-bottom: 0;
+}
+
+/* Math in explanations */
+.explanation .katex-display {
+  background: var(--bg-tertiary);
+  margin: var(--space-2) 0;
 }
 
 /* Hint */

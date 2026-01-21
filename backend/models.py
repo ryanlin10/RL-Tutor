@@ -132,35 +132,38 @@ class UserPerformance(db.Model):
 
 class LectureNote(db.Model):
     """
-    Lecture notes stored in database for RAG retrieval.
+    Documents stored in database for RAG retrieval.
     Chunks are stored with embeddings metadata.
+    Supports both lecture notes and problem sheets as PDFs.
     """
-    
+
     __tablename__ = "lecture_notes"
-    
+
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    
+
     # Document metadata
     title = db.Column(db.String(500), nullable=False)
     topic = db.Column(db.String(200), nullable=False)
     source_file = db.Column(db.String(500))  # Original filename
     page_number = db.Column(db.Integer)  # For PDFs
-    
+    document_type = db.Column(db.String(50), default="lecture_note")  # "lecture_note" or "problem_sheet"
+
     # Content
     content = db.Column(db.Text, nullable=False)  # The actual text chunk
     chunk_index = db.Column(db.Integer)  # Order within document
-    
+
     # Embedding metadata (stored in ChromaDB, but we track here)
     embedding_id = db.Column(db.String(100))  # Reference to ChromaDB embedding
-    
+
     # Metadata
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Indexes for faster queries
     __table_args__ = (
         db.Index('idx_lecture_topic', 'topic'),
         db.Index('idx_lecture_title', 'title'),
+        db.Index('idx_document_type', 'document_type'),
     )
 
 

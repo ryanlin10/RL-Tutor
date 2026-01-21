@@ -197,8 +197,11 @@ class RAGService:
                 similarity = 1 - score
                 if similarity >= score_threshold:
                     source = doc.metadata.get("source", "Unknown")
+                    doc_type = doc.metadata.get("document_type", "lecture_note")
+                    topic = doc.metadata.get("topic", "")
+                    type_label = "LECTURE NOTE" if doc_type == "lecture_note" else "PROBLEM SHEET"
                     relevant_chunks.append(
-                        f"[Source: {Path(source).name}]\n{doc.page_content}"
+                        f"[{type_label} - {topic} - {Path(source).name}]\n{doc.page_content}"
                     )
             
             if not relevant_chunks:
@@ -282,6 +285,7 @@ class RAGService:
                         "source": note.source_file or note.title,
                         "topic": note.topic,
                         "title": note.title,
+                        "document_type": note.document_type or "lecture_note",
                         "page_number": note.page_number,
                         "chunk_index": note.chunk_index,
                         "db_id": note.id,
@@ -330,56 +334,60 @@ class RAGService:
                             "source": note.source_file or note.title,
                             "topic": note.topic,
                             "title": note.title,
+                            "document_type": note.document_type or "lecture_note",
                             "page_number": note.page_number,
                             "chunk_index": note.chunk_index,
                             "db_id": note.id,
                         }
                     )
                     documents.append(doc)
-                
+
                 self.vector_store.add_documents(documents)
                 print(f"Synced {len(documents)} new chunks from database")
             
         except Exception as e:
             print(f"Error syncing from database: {e}")
     
-    def add_lecture_note_to_db(
+    def add_document_to_db(
         self,
         title: str,
         topic: str,
         content: str,
+        document_type: str = "lecture_note",
         source_file: Optional[str] = None,
         page_number: Optional[int] = None,
         chunk_index: Optional[int] = None
     ):
         """
-        Add a lecture note chunk to the database.
-        
+        Add a document chunk to the database.
+
         Args:
             title: Document title
             topic: Mathematical topic
             content: Text content
+            document_type: "lecture_note" or "problem_sheet"
             source_file: Original filename
             page_number: Page number (for PDFs)
             chunk_index: Chunk order within document
-            
+
         Returns:
             Created LectureNote object
         """
         from langchain.schema import Document
         from models import db, LectureNote
-        
+
         note = LectureNote(
             title=title,
             topic=topic,
             content=content,
+            document_type=document_type,
             source_file=source_file,
             page_number=page_number,
             chunk_index=chunk_index,
         )
         db.session.add(note)
         db.session.commit()
-        
+
         # Add to vector store if initialized
         if self._initialized and self.vector_store:
             doc = Document(
@@ -388,14 +396,20 @@ class RAGService:
                     "source": source_file or title,
                     "topic": topic,
                     "title": title,
+                    "document_type": document_type,
                     "page_number": page_number,
                     "chunk_index": chunk_index,
                     "db_id": note.id,
                 }
             )
             self.vector_store.add_documents([doc])
-        
+
         return note
+
+    # Alias for backwards compatibility
+    def add_lecture_note_to_db(self, **kwargs):
+        """Backwards compatible alias for add_document_to_db."""
+        return self.add_document_to_db(document_type="lecture_note", **kwargs)
     
     def get_topics(self) -> list[str]:
         """

@@ -63,7 +63,13 @@ class GroqService:
    - Reference previous quiz performance when relevant
    - Adjust difficulty based on demonstrated understanding
 
-You have access to Oxford Mathematics lecture notes for accurate content."""
+6. USING RETRIEVED CONTEXT:
+   - You have access to Oxford Mathematics lecture notes and problem sheets
+   - When context is provided under "RELEVANT DOCUMENTS", use it to give accurate, curriculum-aligned responses
+   - Context is labelled as either [LECTURE NOTE] or [PROBLEM SHEET] with topic and source
+   - Reference specific content from lecture notes when explaining concepts
+   - Use problem sheet examples to create similar practice problems
+   - If the context doesn't contain relevant information, rely on your knowledge but mention this to the student"""
     
     @property
     def client(self):
@@ -102,7 +108,7 @@ You have access to Oxford Mathematics lecture notes for accurate content."""
         # Build system message with optional RAG context
         system_content = self.system_prompt
         if rag_context:
-            system_content += f"\n\nRELEVANT LECTURE NOTES:\n{rag_context}"
+            system_content += f"\n\nRELEVANT DOCUMENTS:\n{rag_context}"
         
         # Prepare messages for API
         api_messages = [{"role": "system", "content": system_content}]

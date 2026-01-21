@@ -236,15 +236,74 @@ input::placeholder, textarea::placeholder {
 
 /* KaTeX overrides for dark theme */
 .katex {
-  font-size: 1.05em;
+  font-size: 1.1em;
+  color: var(--text-primary);
 }
 
 .katex-display {
   margin: var(--space-4) 0;
-  padding: var(--space-3);
+  padding: var(--space-4);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
+  border-left: 3px solid var(--accent-primary);
   overflow-x: auto;
+}
+
+.katex-display > .katex {
+  font-size: 1.15em;
+}
+
+/* Inline math styling */
+.katex:not(.katex-display .katex) {
+  padding: 0 2px;
+}
+
+/* Improve equation colors in dark theme */
+.katex .mord,
+.katex .mop,
+.katex .mbin,
+.katex .mrel,
+.katex .mopen,
+.katex .mclose,
+.katex .mpunct,
+.katex .minner {
+  color: var(--text-primary);
+}
+
+/* Style fractions and operators */
+.katex .mfrac .frac-line {
+  border-color: var(--text-secondary);
+}
+
+/* Style brackets and parentheses */
+.katex .delimsizing,
+.katex .delimsizinginner {
+  color: var(--accent-secondary);
+}
+
+/* Style math operators */
+.katex .mop {
+  color: var(--accent-primary);
+}
+
+/* Style special characters */
+.katex .accent > .vlist > span > span {
+  color: var(--text-primary);
+}
+
+/* Scrollbar for overflow equations */
+.katex-display::-webkit-scrollbar {
+  height: 6px;
+}
+
+.katex-display::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+  border-radius: 3px;
+}
+
+.katex-display::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
 }
 
 /* Animations */
