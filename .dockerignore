@@ -50,8 +50,7 @@ Thumbs.db
 dist/
 build/
 
-# Railway/Nixpacks configs (force Dockerfile usage)
+# Railway/Nixpacks configs
 nixpacks.toml
-Procfile
 runtime.txt
 railway.toml
