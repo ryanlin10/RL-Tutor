@@ -5,13 +5,14 @@ import rehypeKatex from 'rehype-katex'
 import { preprocessLatex } from '../utils/latexPreprocess'
 import './WorkspacePanel.css'
 
-function WorkspacePanel({ quiz, onClose, onSubmit, onGetHint }) {
+function WorkspacePanel({ quiz, onClose, onSubmit, onGetHint, reviewMode = false, reviewResults = null }) {
   const [currentQuestion, setCurrentQuestion] = useState(0)
   const [answers, setAnswers] = useState({})
   const [hints, setHints] = useState({})
   const [loadingHint, setLoadingHint] = useState(false)
   const [results, setResults] = useState(null)
   const [startTime] = useState(Date.now())
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     // Reset state when quiz changes
@@ -19,9 +20,20 @@ function WorkspacePanel({ quiz, onClose, onSubmit, onGetHint }) {
       setCurrentQuestion(0)
       setAnswers({})
       setHints({})
-      setResults(null)
+      // If in review mode with results, set them immediately
+      if (reviewMode && reviewResults) {
+        setResults(reviewResults)
+        // Populate answers from review results
+        const savedAnswers = {}
+        reviewResults.results?.forEach(r => {
+          savedAnswers[r.question_id] = r.user_answer
+        })
+        setAnswers(savedAnswers)
+      } else {
+        setResults(null)
+      }
     }
-  }, [quiz?.id])
+  }, [quiz?.id, reviewMode, reviewResults])
 
   if (!quiz) {
     return (
@@ -44,9 +56,11 @@ function WorkspacePanel({ quiz, onClose, onSubmit, onGetHint }) {
 
   const handleSelectAnswer = (answer) => {
     if (results) return // Don't allow changes after submission
+    // Ensure question.id is converted to string for consistent keys
+    const questionId = String(question.id)
     setAnswers(prev => ({
       ...prev,
-      [question.id]: answer,
+      [questionId]: answer,
     }))
   }
 
@@ -77,10 +91,26 @@ function WorkspacePanel({ quiz, onClose, onSubmit, onGetHint }) {
   }
 
   const handleSubmit = async () => {
+    if (isSubmitting) return
+
+    setIsSubmitting(true)
     const timeTaken = Math.floor((Date.now() - startTime) / 1000)
-    const result = await onSubmit(answers, timeTaken)
-    if (result) {
-      setResults(result)
+
+    console.log('Submitting quiz with answers:', answers)
+    console.log('Time taken:', timeTaken)
+
+    try {
+      const result = await onSubmit(answers, timeTaken)
+      console.log('Quiz submission result:', result)
+      if (result) {
+        setResults(result)
+      } else {
+        console.error('No result returned from quiz submission')
+      }
+    } catch (error) {
+      console.error('Error submitting quiz:', error)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -97,13 +127,22 @@ function WorkspacePanel({ quiz, onClose, onSubmit, onGetHint }) {
     <div className="workspace-panel">
       <div className="workspace-header">
         <div className="workspace-title">
-          <h2>{quiz.title}</h2>
+          <h2>{reviewMode ? 'Quiz Review' : quiz.title}</h2>
           <span className="workspace-topic">{quiz.topic}</span>
         </div>
-        <button className="close-btn" onClick={onClose} title="Close quiz">
+        <button className="close-btn" onClick={onClose} title={reviewMode ? "Back to chat" : "Close quiz"}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="18" y1="6" x2="6" y2="18"/>
-            <line x1="6" y1="6" x2="18" y2="18"/>
+            {reviewMode ? (
+              <>
+                <path d="M19 12H5"/>
+                <polyline points="12 19 5 12 12 5"/>
+              </>
+            ) : (
+              <>
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </>
+            )}
           </svg>
         </button>
       </div>
@@ -152,7 +191,8 @@ function WorkspacePanel({ quiz, onClose, onSubmit, onGetHint }) {
                 <div className="options-list">
                   {question.options.map((option, idx) => {
                     const optionLetter = option.charAt(0)
-                    const isSelected = answers[question.id] === optionLetter
+                    const questionId = String(question.id)
+                    const isSelected = answers[questionId] === optionLetter
                     const isCorrect = currentResult && currentResult.correct_answer === optionLetter
                     const isWrong = currentResult && isSelected && !currentResult.is_correct
                     
@@ -193,7 +233,7 @@ function WorkspacePanel({ quiz, onClose, onSubmit, onGetHint }) {
                   <textarea
                     className={`text-answer-input ${currentResult ? (currentResult.is_correct ? 'correct' : 'incorrect') : ''}`}
                     placeholder="Type your answer here..."
-                    value={answers[question.id] || ''}
+                    value={answers[String(question.id)] || ''}
                     onChange={(e) => handleSelectAnswer(e.target.value)}
                     disabled={!!results}
                     rows={3}
@@ -269,11 +309,12 @@ function WorkspacePanel({ quiz, onClose, onSubmit, onGetHint }) {
           
           <div className="question-dots">
             {questions.map((q, idx) => {
+              const qId = String(q.id)
               const qResult = getQuestionResult(q.id)
               return (
                 <button
                   key={q.id}
-                  className={`dot ${idx === currentQuestion ? 'active' : ''} ${answers[q.id] ? 'answered' : ''} ${qResult ? (qResult.is_correct ? 'correct' : 'incorrect') : ''}`}
+                  className={`dot ${idx === currentQuestion ? 'active' : ''} ${answers[qId] ? 'answered' : ''} ${qResult ? (qResult.is_correct ? 'correct' : 'incorrect') : ''}`}
                   onClick={() => setCurrentQuestion(idx)}
                   title={`Question ${idx + 1}`}
                 />
@@ -293,21 +334,31 @@ function WorkspacePanel({ quiz, onClose, onSubmit, onGetHint }) {
           </button>
         </div>
 
-        {!results && (
-          <button 
+        {!results && !reviewMode && (
+          <button
             className="submit-btn"
             onClick={handleSubmit}
-            disabled={getAnsweredCount() < totalQuestions}
+            disabled={getAnsweredCount() < totalQuestions || isSubmitting}
           >
-            Submit Quiz ({getAnsweredCount()}/{totalQuestions})
+            {isSubmitting ? 'Submitting...' : `Submit Quiz (${getAnsweredCount()}/${totalQuestions})`}
           </button>
         )}
 
-        {results && (
-          <div className="results-summary">
-            <span className={`score ${results.percentage >= 70 ? 'good' : 'needs-work'}`}>
-              {results.correct_count}/{results.total_questions} correct
-            </span>
+        {(results || reviewMode) && (
+          <div className="results-footer">
+            <div className="results-summary">
+              <span className={`score ${(results?.percentage || reviewResults?.percentage) >= 70 ? 'good' : 'needs-work'}`}>
+                {results?.correct_count || reviewResults?.correct_count}/{results?.total_questions || reviewResults?.total_questions} correct
+                ({Math.round(results?.percentage || reviewResults?.percentage)}%)
+              </span>
+            </div>
+            <button className="exit-btn" onClick={onClose}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 12H5"/>
+                <polyline points="12 19 5 12 12 5"/>
+              </svg>
+              {reviewMode ? 'Back to Chat' : 'Exit Quiz'}
+            </button>
           </div>
         )}
       </div>

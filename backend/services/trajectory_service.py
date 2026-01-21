@@ -192,23 +192,29 @@ class TrajectoryService:
                 session_id=session_id,
                 topic=topic,
                 first_attempt_at=now,
+                questions_attempted=0,
+                questions_correct=0,
+                hints_requested=0,
+                time_on_topic_seconds=0,
+                average_score=0.0,
+                score_trend=0.0,
             )
             db.session.add(performance)
         
-        # Update cumulative stats
-        old_avg = performance.average_score
-        old_count = performance.questions_attempted
-        
-        performance.questions_attempted += questions_attempted
-        performance.questions_correct += questions_correct
-        performance.hints_requested += hints_used
-        performance.time_on_topic_seconds += time_seconds
+        # Update cumulative stats (handle existing records with NULL values)
+        old_avg = performance.average_score or 0.0
+        old_count = performance.questions_attempted or 0
+
+        performance.questions_attempted = (performance.questions_attempted or 0) + questions_attempted
+        performance.questions_correct = (performance.questions_correct or 0) + questions_correct
+        performance.hints_requested = (performance.hints_requested or 0) + hints_used
+        performance.time_on_topic_seconds = (performance.time_on_topic_seconds or 0) + time_seconds
         performance.last_attempt_at = now
-        
+
         # Update average score with exponential moving average
         alpha = 0.3  # Weight for new score
         performance.average_score = alpha * quiz_score + (1 - alpha) * old_avg
-        
+
         # Compute score trend
         if old_count > 0:
             performance.score_trend = quiz_score - old_avg

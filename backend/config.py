@@ -29,7 +29,7 @@ class Config:
     
     # Groq API
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-    GROQ_MODEL = os.getenv("GROQ_MODEL", "deepseek-r1-distill-llama-70b")
+    GROQ_MODEL = os.getenv("GROQ_MODEL", "gpt-oss-120b")  # Multimodal model
     
     # Rate Limiting
     RATELIMIT_STORAGE_URL = os.getenv("REDIS_URL", "memory://")

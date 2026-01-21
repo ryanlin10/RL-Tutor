@@ -16,26 +16,60 @@ quiz_bp = Blueprint("quiz", __name__, url_prefix="/api/quiz")
 @quiz_bp.route("/generate", methods=["POST"])
 def generate_quiz():
     """Generate a new quiz on a topic."""
+    from models import Message
+
     data = request.get_json()
-    
+
     if not data:
         return jsonify({"error": "Request body required"}), 400
-    
+
     session_id = data.get("session_id")
     topic = data.get("topic", "General Mathematics")
     difficulty = data.get("difficulty", "medium")
     num_questions = min(data.get("num_questions", 5), 15)  # Cap at 15
-    
+    context_based = data.get("context_based", False)
+
     if not session_id:
         return jsonify({"error": "session_id required"}), 400
-    
+
     # Ensure session exists
     session = Session.query.get(session_id)
     if not session:
         session = Session(id=session_id)
         db.session.add(session)
         db.session.commit()
-    
+
+    # For context-based quizzes, extract topics from conversation history
+    conversation_context = ""
+    if context_based:
+        # Get recent messages from the session
+        messages = Message.query.filter_by(session_id=session_id).order_by(
+            Message.created_at.desc()
+        ).limit(20).all()
+
+        if messages:
+            # Build conversation context
+            conversation_context = "\n".join([
+                f"{m.role}: {m.content[:500]}" for m in reversed(messages)
+            ])
+
+            # Ask the AI to identify topics from conversation
+            topic_extraction_prompt = f"""Based on this tutoring conversation, identify the main mathematical topics that were discussed:
+
+{conversation_context}
+
+List the 1-3 main topics covered, separated by commas. Focus on specific mathematical concepts like "integration", "matrix operations", "derivatives", etc."""
+
+            topic_response = groq_service.chat(
+                messages=[{"role": "user", "content": topic_extraction_prompt}],
+                temperature=0.3,
+                max_tokens=100,
+            )
+
+            extracted_topic = topic_response.get("content", "").strip()
+            if extracted_topic:
+                topic = extracted_topic
+
     # Get RAG context for the topic (lecture notes)
     rag_context = rag_service.retrieve(
         f"Mathematics {topic} problems exercises examples",
@@ -73,6 +107,7 @@ def generate_quiz():
         difficulty=difficulty,
         num_questions=num_questions,
         context=full_context,
+        conversation_context=conversation_context if context_based else None,
     )
     
     content = response.get("content", "")
@@ -227,92 +262,114 @@ def get_quiz(quiz_id):
 @quiz_bp.route("/<int:quiz_id>/submit", methods=["POST"])
 def submit_quiz(quiz_id):
     """Submit quiz answers for grading."""
+    print(f"Submitting quiz {quiz_id}")
+
     quiz = Quiz.query.get(quiz_id)
     if not quiz:
+        print(f"Quiz {quiz_id} not found")
         return jsonify({"error": "Quiz not found"}), 404
-    
+
     data = request.get_json()
+    print(f"Request data: {data}")
+
     if not data:
         return jsonify({"error": "Request body required"}), 400
-    
+
     answers = data.get("answers", {})
     time_taken = data.get("time_taken_seconds", 0)
-    
+
+    print(f"Answers: {answers}, Time taken: {time_taken}")
+
     if not answers:
         return jsonify({"error": "answers required"}), 400
     
-    # Grade the quiz
-    results = grade_quiz(quiz.questions, answers)
-    
-    # Save attempt
-    attempt = QuizAttempt(
-        quiz_id=quiz_id,
-        answers=answers,
-        score=results["score"],
-        time_taken_seconds=time_taken,
-        correct_count=results["correct_count"],
-        total_questions=results["total_questions"],
-    )
-    db.session.add(attempt)
-    db.session.commit()
-    
-    # Get previous performance for reward computation
-    previous_attempts = QuizAttempt.query.filter_by(quiz_id=quiz_id).order_by(
-        QuizAttempt.completed_at.desc()
-    ).offset(1).first()
-    
-    previous_score = previous_attempts.score if previous_attempts else None
-    
-    # Compute reward
-    reward_data = trajectory_service.compute_reward(
-        session_id=quiz.session_id,
-        quiz_attempt=attempt,
-        previous_score=previous_score,
-    )
-    
-    # Update user performance
-    trajectory_service.update_user_performance(
-        session_id=quiz.session_id,
-        topic=quiz.topic,
-        quiz_score=results["score"],
-        questions_attempted=results["total_questions"],
-        questions_correct=results["correct_count"],
-        hints_used=data.get("hints_used", 0),
-        time_seconds=time_taken,
-    )
-    
-    return jsonify({
-        "attempt_id": attempt.id,
-        "score": results["score"],
-        "percentage": round(results["score"] * 100, 1),
-        "correct_count": results["correct_count"],
-        "total_questions": results["total_questions"],
-        "results": results["question_results"],
-        "reward": reward_data,
-        "time_taken_seconds": time_taken,
-    })
+    try:
+        # Grade the quiz
+        results = grade_quiz(quiz.questions, answers)
+
+        # Save attempt
+        attempt = QuizAttempt(
+            quiz_id=quiz_id,
+            answers=answers,
+            score=results["score"],
+            time_taken_seconds=time_taken,
+            correct_count=results["correct_count"],
+            total_questions=results["total_questions"],
+        )
+        db.session.add(attempt)
+        db.session.commit()
+
+        # Get previous performance for reward computation
+        previous_attempts = QuizAttempt.query.filter_by(quiz_id=quiz_id).order_by(
+            QuizAttempt.completed_at.desc()
+        ).offset(1).first()
+
+        previous_score = previous_attempts.score if previous_attempts else None
+
+        # Compute reward
+        reward_data = trajectory_service.compute_reward(
+            session_id=quiz.session_id,
+            quiz_attempt=attempt,
+            previous_score=previous_score,
+        )
+
+        # Update user performance
+        trajectory_service.update_user_performance(
+            session_id=quiz.session_id,
+            topic=quiz.topic,
+            quiz_score=results["score"],
+            questions_attempted=results["total_questions"],
+            questions_correct=results["correct_count"],
+            hints_used=data.get("hints_used", 0),
+            time_seconds=time_taken,
+        )
+
+        print(f"Quiz submitted successfully: {results['correct_count']}/{results['total_questions']}")
+
+        return jsonify({
+            "attempt_id": attempt.id,
+            "score": results["score"],
+            "percentage": round(results["score"] * 100, 1),
+            "correct_count": results["correct_count"],
+            "total_questions": results["total_questions"],
+            "results": results["question_results"],
+            "reward": reward_data,
+            "time_taken_seconds": time_taken,
+        })
+
+    except Exception as e:
+        print(f"Error submitting quiz: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 def grade_quiz(questions: list, answers: dict) -> dict:
     """Grade quiz answers against correct answers."""
     correct_count = 0
     question_results = []
-    
+
+    print(f"Grading quiz: {len(questions)} questions, answers: {answers}")
+
     for q in questions:
         q_id = str(q.get("id"))
-        user_answer = answers.get(q_id, "").strip().upper()
-        correct_answer = q.get("correct_answer", "").strip().upper()
-        
+        # Handle None, non-string answers safely
+        raw_answer = answers.get(q_id) or answers.get(int(q_id) if q_id.isdigit() else q_id) or ""
+        user_answer = str(raw_answer).strip().upper() if raw_answer else ""
+        correct_answer = str(q.get("correct_answer", "")).strip().upper()
+
+        print(f"  Q{q_id}: user='{user_answer}', correct='{correct_answer}'")
+
         # Handle answer format variations (e.g., "B" vs "B. ATP")
-        is_correct = (
+        is_correct = bool(user_answer and correct_answer and (
             user_answer == correct_answer or
             user_answer.startswith(correct_answer) or
             correct_answer.startswith(user_answer)
-        )
-        
+        ))
+
         if is_correct:
             correct_count += 1
-        
+
         question_results.append({
             "question_id": q_id,
             "is_correct": is_correct,
@@ -320,10 +377,12 @@ def grade_quiz(questions: list, answers: dict) -> dict:
             "correct_answer": correct_answer,
             "explanation": q.get("explanation", ""),
         })
-    
+
     total = len(questions)
     score = correct_count / total if total > 0 else 0.0
-    
+
+    print(f"Quiz graded: {correct_count}/{total} correct, score={score}")
+
     return {
         "score": score,
         "correct_count": correct_count,

@@ -275,17 +275,105 @@
   color: var(--accent-primary);
 }
 
+/* File Attachment Preview */
+.message-attachment {
+  margin-bottom: var(--space-3);
+}
+
+.attachment-preview {
+  max-width: 200px;
+  max-height: 150px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  border: 1px solid var(--border-default);
+}
+
+.attachment-file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.attachment-file svg {
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+/* Quiz Result Summary in Chat */
+.quiz-result-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.quiz-score-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.quiz-score-badge.good {
+  background: rgba(124, 182, 124, 0.15);
+  color: var(--success);
+}
+
+.quiz-score-badge.needs-work {
+  background: var(--accent-muted);
+  color: var(--accent-primary);
+}
+
+.expand-quiz-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.expand-quiz-btn:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.expand-quiz-btn svg {
+  color: var(--accent-primary);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .chat-messages {
     padding: var(--space-3);
   }
-  
+
   .chat-input-area {
     padding: var(--space-3);
   }
-  
+
   .message-content {
     max-width: 85%;
+  }
+
+  .quiz-result-summary {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

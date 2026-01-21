@@ -15,6 +15,8 @@ function App() {
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [currentTopic, setCurrentTopic] = useState('Mathematics')
+  const [fileContext, setFileContext] = useState([]) // Stores uploaded file contexts
+  const [reviewMode, setReviewMode] = useState(false) // For reviewing completed quizzes
 
   // Initialize session on mount
   useEffect(() => {
@@ -118,16 +120,32 @@ function App() {
     }
   }, [sessionId])
 
-  const generateQuiz = useCallback(async (topic, difficulty = 'medium', numQuestions = 5) => {
+  const generateQuiz = useCallback(async (topic = null, difficulty = 'medium', numQuestions = 5) => {
     if (!sessionId) return
 
     setIsLoading(true)
-    
+    setReviewMode(false)
+
+    // If no topic specified, generate based on conversation context
+    let quizTopic = topic
+    if (!quizTopic) {
+      // Extract topic from recent conversation
+      const recentMessages = messages.slice(-10)
+      const conversationContext = recentMessages
+        .map(m => m.content)
+        .join(' ')
+        .slice(0, 2000)
+
+      quizTopic = 'topics discussed in our conversation'
+    }
+
     // Add message indicating quiz generation
     setMessages(prev => [...prev, {
       id: uuidv4(),
       role: 'assistant',
-      content: `Generating a ${difficulty} quiz on ${topic}...`,
+      content: topic
+        ? `Generating a ${difficulty} quiz on ${topic}...`
+        : 'Generating a quiz based on what we\'ve discussed...',
       timestamp: new Date(),
       isSystem: true,
     }])
@@ -138,9 +156,10 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_id: sessionId,
-          topic,
+          topic: topic || 'conversation context',
           difficulty,
           num_questions: numQuestions,
+          context_based: !topic, // Flag to indicate context-based generation
         }),
       })
 
@@ -154,7 +173,7 @@ function App() {
           totalQuestions: data.total_questions,
         })
         setIsWorkspaceOpen(true)
-        setCurrentTopic(topic)
+        setCurrentTopic(data.topic || quizTopic)
 
         // Update the system message
         setMessages(prev => {
@@ -163,7 +182,7 @@ function App() {
           if (updated[lastIdx]?.isSystem) {
             updated[lastIdx] = {
               ...updated[lastIdx],
-              content: `I've prepared a ${difficulty} quiz on ${topic} with ${data.total_questions} questions. Take your time, and feel free to ask for hints if you get stuck!`,
+              content: `I've prepared a quiz on **${data.topic || quizTopic}** with ${data.total_questions} questions. Take your time, and feel free to ask for hints if you get stuck!`,
               isSystem: false,
             }
           }
@@ -190,10 +209,15 @@ function App() {
     } finally {
       setIsLoading(false)
     }
-  }, [sessionId])
+  }, [sessionId, messages])
 
   const submitQuiz = useCallback(async (answers, timeTaken) => {
-    if (!quiz?.id || !sessionId) return null
+    if (!quiz?.id || !sessionId) {
+      console.error('Cannot submit quiz: missing quiz.id or sessionId', { quizId: quiz?.id, sessionId })
+      return null
+    }
+
+    console.log('Submitting quiz:', { quizId: quiz.id, answers, timeTaken })
 
     try {
       const response = await fetch(`${API_BASE}/quiz/${quiz.id}/submit`, {
@@ -205,31 +229,173 @@ function App() {
         }),
       })
 
+      console.log('Quiz submit response status:', response.status)
+
       if (response.ok) {
         const data = await response.json()
-        
-        // Add result message to chat
+        console.log('Quiz submit response data:', data)
+
+        // Store full quiz result with questions for later review
+        const fullQuizResult = {
+          ...data,
+          quiz: {
+            id: quiz.id,
+            title: quiz.title,
+            topic: quiz.topic,
+            questions: quiz.questions,
+          }
+        }
+
+        // Add result message to chat with quiz result attached for expand functionality
         const resultMessage = {
           id: uuidv4(),
           role: 'assistant',
           content: `Quiz completed! You scored **${data.percentage}%** (${data.correct_count}/${data.total_questions} correct).\n\n${
-            data.percentage >= 80 
+            data.percentage >= 80
               ? "Excellent work! You've demonstrated strong understanding of this topic."
               : data.percentage >= 60
               ? "Good effort! Let's review the questions you missed to strengthen your understanding."
               : "This topic needs more practice. Let's go through the concepts again - which question would you like me to explain?"
           }`,
           timestamp: new Date(),
+          quizResult: fullQuizResult, // Attach quiz result for review button
+          hasQuizResult: true,
         }
         setMessages(prev => [...prev, resultMessage])
-        
+
         return data
+      } else {
+        const errorText = await response.text()
+        console.error('Quiz submit failed:', response.status, errorText)
       }
     } catch (error) {
       console.error('Error submitting quiz:', error)
     }
     return null
   }, [quiz, sessionId])
+
+  // Upload file handler for images and PDFs
+  const uploadFile = useCallback(async (file) => {
+    if (!sessionId) return
+
+    const isImage = file.type.startsWith('image/')
+    const isPDF = file.type === 'application/pdf'
+
+    if (!isImage && !isPDF) {
+      alert('Please upload an image or PDF file.')
+      return
+    }
+
+    // Create a preview for the message
+    let preview = null
+    if (isImage) {
+      preview = URL.createObjectURL(file)
+    }
+
+    // Add a user message showing the file upload
+    const uploadMessage = {
+      id: uuidv4(),
+      role: 'user',
+      content: `[Uploaded: ${file.name}]`,
+      timestamp: new Date(),
+      attachment: {
+        type: isImage ? 'image' : 'pdf',
+        name: file.name,
+        preview: preview,
+      }
+    }
+    setMessages(prev => [...prev, uploadMessage])
+    setIsLoading(true)
+
+    try {
+      // Convert file to base64
+      const base64 = await fileToBase64(file)
+
+      // Send to backend for processing
+      const response = await fetch(`${API_BASE}/chat/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId,
+          file_name: file.name,
+          file_type: file.type,
+          file_data: base64,
+          is_image: isImage,
+        }),
+      })
+
+      console.log('Upload response status:', response.status)
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Upload response data:', data)
+
+        // Store file context for future messages
+        setFileContext(prev => [...prev, {
+          id: data.context_id,
+          name: file.name,
+          type: isImage ? 'image' : 'pdf',
+          extractedText: data.extracted_text,
+        }])
+
+        // Add AI response about the file
+        const aiMessage = {
+          id: uuidv4(),
+          role: 'assistant',
+          content: data.content || `I've analyzed the ${isImage ? 'image' : 'PDF'} you uploaded. ${data.summary || 'Feel free to ask me questions about it!'}`,
+          timestamp: new Date(),
+        }
+        setMessages(prev => [...prev, aiMessage])
+      } else {
+        const errorData = await response.text()
+        console.error('Upload failed:', response.status, errorData)
+        throw new Error(`Failed to process file: ${errorData}`)
+      }
+    } catch (error) {
+      console.error('Error uploading file:', error)
+      setMessages(prev => [...prev, {
+        id: uuidv4(),
+        role: 'assistant',
+        content: `I apologize, but I couldn't process the file. Error: ${error.message}`,
+        timestamp: new Date(),
+        isError: true,
+      }])
+    } finally {
+      setIsLoading(false)
+    }
+  }, [sessionId])
+
+  // Helper function to convert file to base64
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.readAsDataURL(file)
+      reader.onload = () => {
+        const base64 = reader.result.split(',')[1]
+        resolve(base64)
+      }
+      reader.onerror = (error) => reject(error)
+    })
+  }
+
+  // Expand quiz for review
+  const expandQuiz = useCallback((quizResult) => {
+    if (!quizResult || !quizResult.quiz) return
+
+    // Set the quiz with results for review mode
+    setQuiz({
+      id: quizResult.quiz.id,
+      title: quizResult.quiz.title,
+      topic: quizResult.quiz.topic,
+      questions: quizResult.quiz.questions,
+      totalQuestions: quizResult.total_questions,
+    })
+    setReviewMode(true)
+    setIsWorkspaceOpen(true)
+
+    // Pass the results to WorkspacePanel for display
+    // This will be handled by passing reviewResults prop
+  }, [])
 
   const getHint = useCallback(async (questionId) => {
     if (!quiz?.id) return null
@@ -254,36 +420,46 @@ function App() {
   const closeQuiz = useCallback(() => {
     setQuiz(null)
     setIsWorkspaceOpen(false)
+    setReviewMode(false)
   }, [])
 
   const toggleWorkspace = useCallback(() => {
     setIsWorkspaceOpen(prev => !prev)
   }, [])
 
+  // Find the most recent quiz result for review mode
+  const currentQuizResult = reviewMode
+    ? messages.findLast(m => m.quizResult?.quiz?.id === quiz?.id)?.quizResult
+    : null
+
   return (
     <div className="app">
-      <Header 
+      <Header
         topic={currentTopic}
         onToggleWorkspace={toggleWorkspace}
         isWorkspaceOpen={isWorkspaceOpen}
         hasQuiz={!!quiz}
       />
-      
+
       <main className={`main-content ${isWorkspaceOpen ? 'workspace-open' : ''}`}>
         <ChatPanel
           messages={messages}
           onSendMessage={sendMessage}
           onGenerateQuiz={generateQuiz}
+          onUploadFile={uploadFile}
+          onExpandQuiz={expandQuiz}
           isLoading={isLoading}
           isExpanded={!isWorkspaceOpen}
         />
-        
+
         {isWorkspaceOpen && (
           <WorkspacePanel
             quiz={quiz}
             onClose={closeQuiz}
             onSubmit={submitQuiz}
             onGetHint={getHint}
+            reviewMode={reviewMode}
+            reviewResults={currentQuizResult}
           />
         )}
       </main>

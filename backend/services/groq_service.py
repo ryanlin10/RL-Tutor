@@ -12,7 +12,7 @@ from config import Config
 
 class GroqService:
     """Service for interacting with Groq API."""
-    
+
     def __init__(self):
         self.model = Config.GROQ_MODEL
         self._client = None
@@ -150,22 +150,34 @@ class GroqService:
         topic: str,
         difficulty: str = "medium",
         num_questions: int = 5,
-        context: Optional[str] = None
+        context: Optional[str] = None,
+        conversation_context: Optional[str] = None
     ) -> dict:
         """
         Generate a quiz on a specific topic.
-        
+
         Args:
             topic: The mathematical topic for the quiz
             difficulty: easy, medium, or hard
             num_questions: Number of questions to generate
             context: Optional RAG context
-            
+            conversation_context: Optional conversation history to base questions on
+
         Returns:
             Quiz data dict or error
         """
-        prompt = f"""Generate a {num_questions}-question multiple choice quiz on {topic} ({difficulty} difficulty).
+        # Build conversation context section if provided
+        conversation_section = ""
+        if conversation_context:
+            conversation_section = f"""
+CONVERSATION HISTORY (base your questions on what was actually discussed):
+{conversation_context}
 
+IMPORTANT: Generate questions that directly test understanding of the specific concepts, examples, and problems discussed in the conversation above. Questions should feel like a natural follow-up to what the student was learning.
+"""
+
+        prompt = f"""Generate a {num_questions}-question multiple choice quiz on {topic} ({difficulty} difficulty).
+{conversation_section}
 Format: JSON only, no other text.
 {{
   "type": "quiz",
@@ -203,12 +215,12 @@ Rules: 4 options per question (A/B/C/D), use $...$ for math. Keep explanations s
     ) -> dict:
         """
         Evaluate a user's answer to a question.
-        
+
         Args:
             question: The question dict
             user_answer: User's submitted answer
             context: Optional RAG context
-            
+
         Returns:
             Evaluation with correctness, explanation, and feedback
         """
@@ -227,13 +239,103 @@ Respond with JSON:
 }}"""
 
         messages = [{"role": "user", "content": prompt}]
-        
+
         return self.chat(
             messages=messages,
             rag_context=context,
             temperature=0.3,
             max_tokens=1024
         )
+
+    def chat_with_image(
+        self,
+        prompt: str,
+        image_base64: str,
+        image_media_type: str = "image/jpeg",
+        temperature: float = 0.7,
+        max_tokens: int = 2048
+    ) -> dict:
+        """
+        Send a chat completion request with an image (multimodal).
+
+        Args:
+            prompt: Text prompt describing what to do with the image
+            image_base64: Base64 encoded image data
+            image_media_type: MIME type of the image (e.g., image/jpeg, image/png)
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens in response
+
+        Returns:
+            Dict with response content and metadata
+        """
+        start_time = time.time()
+
+        # Build multimodal message with image
+        user_message = {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{image_media_type};base64,{image_base64}"
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": prompt
+                }
+            ]
+        }
+
+        # System message for image analysis context
+        system_message = {
+            "role": "system",
+            "content": """You are Dr. Turing, an expert AI mathematics tutor. You are analyzing an image uploaded by a student.
+
+Your tasks:
+1. Describe what you see in the image clearly
+2. If it contains mathematical content (equations, graphs, problems, diagrams):
+   - Identify and transcribe any mathematical notation using LaTeX
+   - Explain the mathematical concepts shown
+   - Offer to help solve problems or answer questions about the content
+3. If it's a handwritten solution or work:
+   - Check for errors and provide feedback
+   - Suggest improvements or corrections
+4. Always be encouraging and educational in your response
+
+Use LaTeX notation for math: $inline$ or $$display$$"""
+        }
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[system_message, user_message],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
+            response_time_ms = int((time.time() - start_time) * 1000)
+
+            return {
+                "content": response.choices[0].message.content,
+                "model": response.model,
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens,
+                "response_time_ms": response_time_ms,
+                "finish_reason": response.choices[0].finish_reason,
+            }
+
+        except Exception as e:
+            return {
+                "content": f"I apologize, but I encountered an error analyzing the image: {str(e)}. Please try again or describe the content to me.",
+                "error": str(e),
+                "model": self.model,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "response_time_ms": int((time.time() - start_time) * 1000),
+            }
 
 
 # Singleton instance

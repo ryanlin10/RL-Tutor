@@ -545,6 +545,12 @@
   cursor: not-allowed;
 }
 
+.results-footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
 .results-summary {
   text-align: center;
 }
@@ -559,6 +565,32 @@
 }
 
 .score.needs-work {
+  color: var(--accent-primary);
+}
+
+.exit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.exit-btn:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+}
+
+.exit-btn svg {
   color: var(--accent-primary);
 }
 
