@@ -28,7 +28,7 @@ chromadb>=0.4.22
 
 # Utilities
 python-dotenv==1.0.0
-numpy==1.26.2
+numpy>=1.26.2
 tiktoken>=0.7.0
 gunicorn==21.2.0
-redis==5.0.1
+redis>=5.0.1

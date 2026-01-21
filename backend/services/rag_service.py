@@ -8,18 +8,7 @@ from pathlib import Path
 from typing import Optional, List
 import uuid
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import (
-    DirectoryLoader,
-    TextLoader,
-    PyPDFLoader,
-)
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_chroma import Chroma
-from langchain.schema import Document
-
 from config import Config
-from models import db, LectureNote
 
 
 class RAGService:
@@ -31,15 +20,23 @@ class RAGService:
         self.vector_db_path = Config.VECTOR_DB_PATH
         self.lecture_notes_path = Config.LECTURE_NOTES_PATH
         
-        # Initialize embeddings model
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
-            model_kwargs={"device": "cpu"},
-        )
-        
-        self.vector_store: Optional[Chroma] = None
+        # Lazy initialization - don't load models until needed
+        self._embeddings = None
+        self.vector_store = None
         self._initialized = False
-        # Don't initialize here - wait for app context
+    
+    @property
+    def embeddings(self):
+        """Lazy load embeddings model only when needed."""
+        if self._embeddings is None:
+            print("Loading embeddings model...")
+            from langchain_huggingface import HuggingFaceEmbeddings
+            self._embeddings = HuggingFaceEmbeddings(
+                model_name="sentence-transformers/all-MiniLM-L6-v2",
+                model_kwargs={"device": "cpu"},
+            )
+            print("Embeddings model loaded.")
+        return self._embeddings
     
     def _initialize_vector_store(self):
         """Initialize or load the vector store from database."""
@@ -47,7 +44,7 @@ class RAGService:
             return  # Already initialized
         
         try:
-            from flask import current_app
+            from langchain_chroma import Chroma
             
             vector_db_path = Path(self.vector_db_path)
             
@@ -73,6 +70,9 @@ class RAGService:
             
             # Try to build from database first
             try:
+                from flask import current_app
+                from models import LectureNote
+                
                 with current_app.app_context():
                     note_count = LectureNote.query.count()
                     if note_count > 0:
@@ -99,6 +99,10 @@ class RAGService:
     
     def _build_vector_store(self):
         """Build vector store from lecture notes."""
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
+        from langchain_community.document_loaders import TextLoader, PyPDFLoader
+        from langchain_chroma import Chroma
+        
         print("Building vector store from lecture notes...")
         
         documents = []
@@ -177,7 +181,6 @@ class RAGService:
         # Lazy initialization on first use
         if not self._initialized:
             self._initialize_vector_store()
-            self._initialized = True
         
         if self.vector_store is None:
             return ""
@@ -217,6 +220,10 @@ class RAGService:
         Returns:
             Success boolean
         """
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
+        from langchain_community.document_loaders import TextLoader, PyPDFLoader
+        from langchain_chroma import Chroma
+        
         try:
             path = Path(file_path)
             
@@ -254,8 +261,11 @@ class RAGService:
     
     def _build_vector_store_from_db(self):
         """Build vector store from database lecture notes."""
+        from langchain_chroma import Chroma
+        from langchain.schema import Document
+        from models import LectureNote
+        
         try:
-            from flask import current_app
             # Get all lecture notes from database
             notes = LectureNote.query.all()
             
@@ -299,6 +309,9 @@ class RAGService:
     
     def _sync_from_database(self):
         """Sync vector store with database (add any new notes)."""
+        from langchain.schema import Document
+        from models import LectureNote
+        
         try:
             if self.vector_store is None:
                 return
@@ -338,7 +351,7 @@ class RAGService:
         source_file: Optional[str] = None,
         page_number: Optional[int] = None,
         chunk_index: Optional[int] = None
-    ) -> LectureNote:
+    ):
         """
         Add a lecture note chunk to the database.
         
@@ -353,6 +366,9 @@ class RAGService:
         Returns:
             Created LectureNote object
         """
+        from langchain.schema import Document
+        from models import db, LectureNote
+        
         note = LectureNote(
             title=title,
             topic=topic,
@@ -364,8 +380,8 @@ class RAGService:
         db.session.add(note)
         db.session.commit()
         
-        # Add to vector store
-        if self.vector_store:
+        # Add to vector store if initialized
+        if self._initialized and self.vector_store:
             doc = Document(
                 page_content=content,
                 metadata={
@@ -378,7 +394,6 @@ class RAGService:
                 }
             )
             self.vector_store.add_documents([doc])
-            # Update embedding_id (ChromaDB handles this internally)
         
         return note
     
@@ -390,6 +405,7 @@ class RAGService:
             List of topic names
         """
         try:
+            from models import db, LectureNote
             # Get unique topics from database
             topics = db.session.query(LectureNote.topic).distinct().all()
             if topics:

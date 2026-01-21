@@ -58,6 +58,13 @@ def create_app(config_class=Config):
     @app.route("/health")
     def health():
         """Fast health check - no database queries to avoid timeouts."""
+        # Return plain text for maximum compatibility with health checkers
+        return "OK", 200, {"Content-Type": "text/plain"}
+    
+    # Health check with JSON (alternative endpoint)
+    @app.route("/health/json")
+    def health_json():
+        """Health check with JSON response."""
         return jsonify({
             "status": "healthy",
             "service": "rl-tutor-api"
