@@ -13,6 +13,14 @@ from services import groq_service, rag_service, trajectory_service
 chat_bp = Blueprint("chat", __name__, url_prefix="/api/chat")
 
 
+def sanitize_text(text: str) -> str:
+    """Remove NUL bytes and other problematic characters for PostgreSQL."""
+    if not text:
+        return text
+    # Remove NUL bytes (0x00) which PostgreSQL text fields cannot store
+    return text.replace('\x00', '')
+
+
 @chat_bp.route("/session", methods=["POST"])
 def create_session():
     """Create a new tutoring session."""
@@ -383,7 +391,7 @@ What can you tell me about this image?"""
                         context_message = Message(
                             session_id=session_id,
                             role="system",
-                            content=f"[File Context - {file_name}]\n{extracted_text}",
+                            content=sanitize_text(f"[File Context - {file_name}]\n{extracted_text}"),
                         )
                         db.session.add(context_message)
                         db.session.commit()
@@ -447,7 +455,7 @@ Please acknowledge that you've received this document and briefly summarize what
         context_message = Message(
             session_id=session_id,
             role="system",
-            content=f"[File Context - {file_name}]\n{extracted_text}",
+            content=sanitize_text(f"[File Context - {file_name}]\n{extracted_text}"),
         )
         db.session.add(context_message)
         db.session.commit()
