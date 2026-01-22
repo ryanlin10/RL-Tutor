@@ -3,7 +3,7 @@ Flask application for RL Tutor - AI-powered mathematics tutoring.
 """
 
 import os
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 from flask_migrate import Migrate
 from flask_limiter import Limiter
@@ -15,31 +15,30 @@ from models import db
 
 def create_app(config_class=Config):
     """Application factory."""
+    app = Flask(__name__)
+    app.config.from_object(config_class)
+
     # Check if static folder exists (built frontend)
     static_folder = os.path.join(os.path.dirname(__file__), 'static')
-    if os.path.exists(static_folder):
-        app = Flask(__name__, static_folder='static', static_url_path='')
-    else:
-        app = Flask(__name__)
-    
-    app.config.from_object(config_class)
-    
+    has_frontend = os.path.exists(static_folder) and os.path.exists(
+        os.path.join(static_folder, 'index.html')
+    )
+
     # Initialize extensions
     db.init_app(app)
-    
-    # CORS - allow all origins in production (frontend served from same origin)
+
+    # CORS - allow all origins
     CORS(app, resources={
         r"/api/*": {
             "origins": "*",
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"],
-            "supports_credentials": False,
+            "allow_headers": "*",
         }
     })
-    
+
     # Database migrations
     Migrate(app, db)
-    
+
     # Rate limiting
     limiter = Limiter(
         key_func=get_remote_address,
@@ -47,90 +46,75 @@ def create_app(config_class=Config):
         default_limits=["1000 per hour"],
         storage_uri=app.config.get("RATELIMIT_STORAGE_URL", "memory://"),
     )
-    
-    # Register blueprints
+
+    # Register blueprints FIRST (before any catch-all routes)
     from routes import chat_bp, quiz_bp, documents_bp
     app.register_blueprint(chat_bp)
     app.register_blueprint(quiz_bp)
     app.register_blueprint(documents_bp)
-    
-    # Health check endpoint (fast, no dependencies, no DB queries)
+
+    # Health check endpoint
     @app.route("/health")
     def health():
-        """Fast health check - no database queries to avoid timeouts."""
-        # Return plain text for maximum compatibility with health checkers
         return "OK", 200, {"Content-Type": "text/plain"}
-    
-    # Health check with JSON (alternative endpoint)
-    @app.route("/health/json")
-    def health_json():
-        """Health check with JSON response."""
-        return jsonify({
-            "status": "healthy",
-            "service": "rl-tutor-api"
-        }), 200
-    
+
     # API info endpoint
     @app.route("/api")
     def api_info():
         return jsonify({
             "name": "RL Tutor API",
             "version": "1.0.0",
-            "description": "AI-powered mathematics tutoring with RL optimization",
             "endpoints": {
-                "chat": {
-                    "POST /api/chat/session": "Create new session",
-                    "GET /api/chat/session/<id>": "Get session details",
-                    "POST /api/chat/message": "Send message",
-                    "GET /api/chat/topics": "Get available topics",
-                },
-                "quiz": {
-                    "POST /api/quiz/generate": "Generate quiz",
-                    "GET /api/quiz/<id>": "Get quiz",
-                    "POST /api/quiz/<id>/submit": "Submit answers",
-                    "POST /api/quiz/<id>/hint": "Get hint",
-                    "GET /api/quiz/history/<session_id>": "Get quiz history",
-                },
+                "chat": "/api/chat/*",
+                "quiz": "/api/quiz/*",
             },
         })
-    
-    # Serve React frontend (for production)
-    @app.route('/')
-    def serve_frontend():
-        if app.static_folder and os.path.exists(os.path.join(app.static_folder, 'index.html')):
-            return send_from_directory(app.static_folder, 'index.html')
-        return jsonify({"message": "RL Tutor API", "docs": "/api"})
-    
+
+    # Serve frontend static assets
+    if has_frontend:
+        @app.route('/assets/<path:filename>')
+        def serve_assets(filename):
+            return send_from_directory(os.path.join(static_folder, 'assets'), filename)
+
+        @app.route('/')
+        def serve_frontend():
+            return send_from_directory(static_folder, 'index.html')
+
+        # Catch-all for SPA routing (must be last)
+        @app.route('/<path:path>')
+        def catch_all(path):
+            # Don't catch API routes
+            if path.startswith('api/'):
+                return jsonify({"error": "Not found"}), 404
+            # Serve index.html for SPA routing
+            return send_from_directory(static_folder, 'index.html')
+
     # Error handlers
     @app.errorhandler(404)
     def not_found(error):
-        # For SPA routing - serve index.html for non-API routes
-        if app.static_folder and os.path.exists(os.path.join(app.static_folder, 'index.html')):
-            return send_from_directory(app.static_folder, 'index.html')
+        if has_frontend and not request.path.startswith('/api/'):
+            return send_from_directory(static_folder, 'index.html')
         return jsonify({"error": "Not found"}), 404
-    
+
+    @app.errorhandler(405)
+    def method_not_allowed(error):
+        return jsonify({"error": "Method not allowed"}), 405
+
     @app.errorhandler(429)
     def rate_limit_exceeded(error):
-        return jsonify({
-            "error": "Rate limit exceeded",
-            "message": "Maximum 1000 requests per hour",
-        }), 429
-    
+        return jsonify({"error": "Rate limit exceeded"}), 429
+
     @app.errorhandler(500)
     def internal_error(error):
         return jsonify({"error": "Internal server error"}), 500
-    
-    # Create tables (handle case where tables already exist)
+
+    # Create tables
     with app.app_context():
         try:
             db.create_all()
         except Exception as e:
-            # Tables may already exist in PostgreSQL - this is fine
             print(f"Note: db.create_all() raised: {e}")
-            print("This is usually fine if tables already exist.")
-        # RAG service will initialize lazily on first use
-        # Don't block startup with RAG initialization
-    
+
     return app
 
 
