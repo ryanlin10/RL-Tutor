@@ -16,11 +16,24 @@ class Config:
         "DATABASE_URL",
         "sqlite:///rl_tutor.db"
     )
-    # Railway uses postgres:// but SQLAlchemy needs postgresql://
-    if SQLALCHEMY_DATABASE_URI.startswith("postgres://"):
-        SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace(
-            "postgres://", "postgresql://", 1
-        )
+    # Handle PostgreSQL connection strings
+    if SQLALCHEMY_DATABASE_URI.startswith(("postgres://", "postgresql://")):
+        # Detect which PostgreSQL driver is available
+        try:
+            import psycopg2
+            driver = "postgresql"
+        except ImportError:
+            # Fall back to psycopg (v3) for Python 3.13+
+            driver = "postgresql+psycopg"
+        # Replace postgres:// or postgresql:// with the correct driver
+        if SQLALCHEMY_DATABASE_URI.startswith("postgres://"):
+            SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace(
+                "postgres://", f"{driver}://", 1
+            )
+        elif SQLALCHEMY_DATABASE_URI.startswith("postgresql://"):
+            SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace(
+                "postgresql://", f"{driver}://", 1
+            )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
