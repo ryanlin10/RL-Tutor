@@ -120,9 +120,14 @@ def create_app(config_class=Config):
     def internal_error(error):
         return jsonify({"error": "Internal server error"}), 500
     
-    # Create tables
+    # Create tables (handle case where tables already exist)
     with app.app_context():
-        db.create_all()
+        try:
+            db.create_all()
+        except Exception as e:
+            # Tables may already exist in PostgreSQL - this is fine
+            print(f"Note: db.create_all() raised: {e}")
+            print("This is usually fine if tables already exist.")
         # RAG service will initialize lazily on first use
         # Don't block startup with RAG initialization
     

@@ -41,23 +41,27 @@ def upload_lecture_note():
     title = request.form.get('title', file.filename)
     
     try:
+        # Check if document processing dependencies are available
+        try:
+            from langchain_community.document_loaders import TextLoader, PyPDFLoader
+            from langchain_text_splitters import RecursiveCharacterTextSplitter
+        except ImportError:
+            return jsonify({"error": "Document processing dependencies not installed"}), 501
+
         # Save file temporarily
         filename = secure_filename(file.filename)
         temp_path = os.path.join('/tmp', filename)
         file.save(temp_path)
-        
+
         # Load and process document
-        from langchain_community.document_loaders import TextLoader, PyPDFLoader
-        
         if filename.endswith('.pdf'):
             loader = PyPDFLoader(temp_path)
         else:
             loader = TextLoader(temp_path, encoding='utf-8')
-        
+
         documents = loader.load()
-        
+
         # Split into chunks
-        from langchain_text_splitters import RecursiveCharacterTextSplitter
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=rag_service.chunk_size,
             chunk_overlap=rag_service.chunk_overlap,
@@ -115,14 +119,19 @@ def upload_problem_sheet():
     title = request.form.get('title', file.filename)
 
     try:
+        # Check if document processing dependencies are available
+        try:
+            from langchain_community.document_loaders import TextLoader, PyPDFLoader
+            from langchain_text_splitters import RecursiveCharacterTextSplitter
+        except ImportError:
+            return jsonify({"error": "Document processing dependencies not installed"}), 501
+
         # Save file temporarily
         filename = secure_filename(file.filename)
         temp_path = os.path.join('/tmp', filename)
         file.save(temp_path)
 
         # Load and process document
-        from langchain_community.document_loaders import TextLoader, PyPDFLoader
-
         if filename.endswith('.pdf'):
             loader = PyPDFLoader(temp_path)
         else:
@@ -131,7 +140,6 @@ def upload_problem_sheet():
         documents = loader.load()
 
         # Split into chunks
-        from langchain_text_splitters import RecursiveCharacterTextSplitter
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=rag_service.chunk_size,
             chunk_overlap=rag_service.chunk_overlap,
